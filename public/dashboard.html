@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - GitLab Copilot</title>
+  <meta name="description" content="Manage your GitLab Copilot configurations and monitor AI assistance activity.">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="/css/main.css">
+
+  <!-- Preload critical resources -->
+  <link rel="preload" href="/js/api.js" as="script">
+  <link rel="preload" href="/js/components.js" as="script">
+</head>
+<body>
+  <div id="app">
+    <!-- Content will be loaded here -->
+  </div>
+
+  <!-- Scripts -->
+  <script src="/js/api.js"></script>
+  <script src="/js/components.js"></script>
+
+  <script>
+    let currentUser = null;
+    let userConfigs = [];
+    let userSessions = [];
+
+    // Initialize the dashboard
+    document.addEventListener('DOMContentLoaded', async function() {
+      const app = document.getElementById('app');
+
+      // Require authentication
+      const isAuthenticated = await Navigation.requireAuth();
+      if (!isAuthenticated) {
+        return;
+      }
+
+      // Show loading
+      app.innerHTML = createPageWrapper(
+        'Dashboard',
+        'Welcome to your GitLab Copilot control center',
+        createSpinner('Loading your dashboard...'),
+        'dashboard'
+      );
+
+      try {
+        // Load user data
+        await loadDashboardData();
+
+        // Render dashboard
+        app.innerHTML = createDashboardPage();
+
+        // Show welcome message if just logged in
+        if (sessionStorage.getItem('justLoggedIn') === 'true') {
+          const username = sessionStorage.getItem('username') || currentUser?.username || 'there';
+          UI.showAlert(`Welcome back, ${username}! Your dashboard is ready.`, 'success');
+          sessionStorage.removeItem('justLoggedIn');
+          sessionStorage.removeItem('username');
+        }
+
+      } catch (error) {
+        console.error('Dashboard loading error:', error);
+        app.innerHTML = createPageWrapper(
+          'Dashboard',
+          'Welcome to your GitLab Copilot control center',
+          createAlert('Failed to load dashboard data. Please refresh the page and try again.', 'error'),
+          'dashboard'
+        );
+      }
+    });
+
+    async function loadDashboardData() {
+      try {
+        // Load user profile
+        const userResponse = await api.getCurrentUser();
+        currentUser = userResponse.user;
+
+        // Load GitLab configurations
+        try {
+          const configsResponse = await api.getGitLabConfigs();
+          userConfigs = configsResponse.configurations || [];
+        } catch (error) {
+          console.warn('Failed to load configs:', error);
+          userConfigs = [];
+        }
+
+        // Load user sessions
+        try {
+          const sessionsResponse = await api.getUserSessions();
+          userSessions = sessionsResponse.sessions || [];
+        } catch (error) {
+          console.warn('Failed to load sessions:', error);
+          userSessions = [];
+        }
+
+      } catch (error) {
+        console.error('Failed to load dashboard data:', error);
+        throw error;
+      }
+    }
+
+    function createDashboardPage() {
+      const basePath = window.location.pathname.includes('/auth') ? '/auth' : '';
+
+      return createPageWrapper(
+        `Welcome, ${currentUser?.username || 'User'}!`,
+        'Manage your GitLab Copilot configurations and monitor activity',
+        `
+          <!-- Quick Actions -->
+          <div class="quick-actions-grid page-section">
+            ${createQuickActionCard(
+              '⚙️',
+              'Manage Configurations',
+              'Add, edit, or test your GitLab instance configurations',
+              `${basePath}/config`,
+              'primary'
+            )}
+
+            ${createQuickActionCard(
+              '📊',
+              'View Statistics',
+              'Monitor your AI assistance requests and responses',
+              `${basePath}/stats`,
+              'secondary'
+            )}
+
+            ${createQuickActionCard(
+              '📚',
+              'Documentation',
+              'Learn how to set up webhooks and use @claude commands',
+              '/docs',
+              'secondary'
+            )}
+
+            ${createQuickActionCard(
+              '🔒',
+              'Security Settings',
+              'Manage your account security and active sessions',
+              '#',
+              'secondary',
+              'onclick="openModal(\'securityModal\')"'
+            )}
+          </div>
+
+          <!-- Configuration Summary -->
+          <div class="page-section">
+            ${createConfigurationSummary()}
+          </div>
+
+          <!-- Getting Started Guide -->
+          ${userConfigs.length === 0 ? createGettingStartedGuide() : ''}
+
+          <!-- Recent Activity Placeholder -->
+          <div class="page-section page-section--compact">
+            ${createCard(
+              '📈 Activity Overview',
+              createEmptyState(
+                'Activity Monitoring',
+                'Activity tracking and analytics are coming soon. You\'ll be able to see your AI assistance usage, popular commands, and performance metrics.',
+                createButton('Learn More', 'button', 'secondary', '', false, 'onclick="showComingSoon(\'Activity monitoring\')"')
+              ),
+              'Monitor your GitLab Copilot usage and AI assistance requests'
+            )}
+          </div>
+
+          <!-- Security Modal -->
+          ${createSecurityModal()}
+
+          <!-- Coming Soon Modal -->
+          ${createComingSoonModal()}
+        `,
+        'dashboard'
+      );
+    }
+
+    function createQuickActionCard(icon, title, description, link, variant, extraAttributes = '') {
+      const attributeString = extraAttributes ? ` ${extraAttributes.trim()}` : '';
+      const isDocsLink = typeof link === 'string' && link.includes('/docs');
+      const isExternal = typeof link === 'string' && link.startsWith('http');
+      const shouldOpenNewTab = isExternal || isDocsLink;
+      const className = `quick-action-card quick-action-card--${variant}`;
+      const cardInner = `
+        <span class="quick-action-card__icon">${icon}</span>
+        <div class="quick-action-card__content">
+          <h3 class="quick-action-card__title">${title}</h3>
+          <p class="quick-action-card__description">${description}</p>
+        </div>
+        <span class="quick-action-card__chevron">→</span>
+      `;
+
+      const hasOnclick = /onclick=/.test(extraAttributes || '');
+
+      if (hasOnclick || !link || link === '#') {
+        return `
+          <button type="button" class="${className}"${attributeString}>
+            ${cardInner}
+          </button>
+        `;
+      }
+
+      const targetAttr = shouldOpenNewTab ? ' target="_blank"' : '';
+      const relAttr = shouldOpenNewTab ? ' rel="noopener noreferrer"' : '';
+
+      return `
+        <a href="${link}" class="${className}"${targetAttr}${relAttr}${attributeString}>
+          ${cardInner}
+        </a>
+      `;
+    }
+
+    function createConfigurationSummary() {
+      const activeConfigs = userConfigs.filter(config => config.isActive).length;
+      const defaultConfig = userConfigs.find(config => config.isDefault);
+
+      return createCard(
+        '⚙️ Configuration Summary',
+        `
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 2rem;">
+            <div style="text-align: center;">
+              <div style="font-size: 2rem; font-weight: 600; color: var(--primary-color); margin-bottom: 0.5rem;">
+                ${userConfigs.length}
+              </div>
+              <div style="color: var(--gray-600); font-size: 0.875rem;">
+                Total Configurations
+              </div>
+            </div>
+
+            <div style="text-align: center;">
+              <div style="font-size: 2rem; font-weight: 600; color: var(--success-color); margin-bottom: 0.5rem;">
+                ${activeConfigs}
+              </div>
+              <div style="color: var(--gray-600); font-size: 0.875rem;">
+                Active Configurations
+              </div>
+            </div>
+
+            <div style="text-align: center;">
+              <div style="font-size: 2rem; margin-bottom: 0.5rem;">
+                ${defaultConfig ? '✅' : '❌'}
+              </div>
+              <div style="color: var(--gray-600); font-size: 0.875rem;">
+                Default Config Set
+              </div>
+            </div>
+
+            <div style="text-align: center;">
+              <div style="font-size: 2rem; margin-bottom: 0.5rem;">
+                🔒
+              </div>
+              <div style="color: var(--gray-600); font-size: 0.875rem;">
+                Encrypted Storage
+              </div>
+            </div>
+          </div>
+        `,
+        userConfigs.length > 0 ?
+          `Quick overview of your GitLab instance configurations` :
+          `You haven't added any GitLab configurations yet`,
+        userConfigs.length > 0 ? `
+          <div style="text-align: center;">
+            <a href="${window.location.pathname.includes('/auth') ? '/auth' : ''}/config" class="btn btn-primary">
+              Manage Configurations
+            </a>
+          </div>
+        ` : null
+      );
+    }
+
+    function createGettingStartedGuide() {
+      const basePath = window.location.pathname.includes('/auth') ? '/auth' : '';
+
+      return createCard(
+        '🚀 Get Started with GitLab Copilot',
+        `
+          <div style="margin-bottom: 2rem;">
+            <p style="color: var(--gray-600); margin-bottom: 1.5rem;">
+              Welcome to GitLab Copilot! Follow these steps to start using AI assistance in your GitLab workflow:
+            </p>
+
+            <div style="display: grid; gap: 1.5rem;">
+              ${createStepCard(
+                '1',
+                'Add GitLab Configuration',
+                'Connect your GitLab instance by providing the URL, access token, and webhook secret.',
+                `<a href="${basePath}/config" class="btn btn-sm btn-primary">Add Configuration</a>`
+              )}
+
+              ${createStepCard(
+                '2',
+                'Configure Webhooks',
+                'Set up GitLab webhooks to send events to your GitLab Copilot instance for real-time processing.',
+                `<a href="/docs" target="_blank" class="btn btn-sm btn-secondary">View Documentation</a>`
+              )}
+
+              ${createStepCard(
+                '3',
+                'Use @claude Commands',
+                'Mention @claude in your GitLab issues, merge requests, or comments to trigger AI assistance.',
+                `<button onclick="showComingSoon('Usage examples')" class="btn btn-sm btn-secondary">See Examples</button>`
+              )}
+            </div>
+          </div>
+        `,
+        'Complete these steps to unlock the full power of AI-assisted development'
+      );
+    }
+
+    function createStepCard(number, title, description, action) {
+      return `
+        <div style="display: flex; align-items: flex-start; gap: 1rem; padding: 1.5rem; background: var(--gray-50); border-radius: var(--radius-lg);">
+          <div style="background: var(--primary-color); color: white; width: 2rem; height: 2rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0;">
+            ${number}
+          </div>
+          <div style="flex: 1;">
+            <h4 style="margin-bottom: 0.5rem; color: var(--gray-800);">${title}</h4>
+            <p style="color: var(--gray-600); margin-bottom: 1rem; font-size: 0.875rem;">${description}</p>
+            ${action}
+          </div>
+        </div>
+      `;
+    }
+
+    function createSecurityModal() {
+      const activeSessions = userSessions.filter(session => session.isActive).length;
+
+      return createModal(
+        'securityModal',
+        '🔒 Security Settings',
+        `
+          <div style="margin-bottom: 2rem;">
+            <h4 style="margin-bottom: 1rem;">Account Information</h4>
+            <div style="background: var(--gray-50); padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1.5rem;">
+              <div style="margin-bottom: 0.5rem;"><strong>Username:</strong> ${currentUser?.username || 'Unknown'}</div>
+              <div style="margin-bottom: 0.5rem;"><strong>Email:</strong> ${currentUser?.email || 'Unknown'}</div>
+              <div><strong>User Token:</strong> <code style="font-size: 0.75rem; background: var(--gray-200); padding: 0.25rem;">***${currentUser?.id?.slice(-8) || 'unknown'}</code></div>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 2rem;">
+            <h4 style="margin-bottom: 1rem;">Active Sessions</h4>
+            <div style="background: var(--gray-50); padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1rem;">
+              <div style="font-size: 1.5rem; font-weight: 600; color: var(--primary-color); text-align: center;">
+                ${activeSessions}
+              </div>
+              <div style="text-align: center; color: var(--gray-600); font-size: 0.875rem;">
+                Active Sessions
+              </div>
+            </div>
+            <p style="font-size: 0.875rem; color: var(--gray-600);">
+              You can terminate sessions from untrusted devices to improve security.
+            </p>
+          </div>
+
+          <div>
+            <h4 style="margin-bottom: 1rem;">Security Actions</h4>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+              <button onclick="showComingSoon('Change password')" class="btn btn-secondary" style="justify-content: flex-start;">
+                🔑 Change Password
+              </button>
+              <button onclick="showComingSoon('Manage sessions')" class="btn btn-secondary" style="justify-content: flex-start;">
+                📱 Manage Active Sessions
+              </button>
+              <button onclick="showComingSoon('Two-factor authentication')" class="btn btn-secondary" style="justify-content: flex-start;">
+                🛡️ Enable Two-Factor Authentication
+              </button>
+            </div>
+          </div>
+        `,
+        `
+          <div style="display: flex; gap: 1rem;">
+            <button onclick="closeModal('securityModal')" class="btn btn-secondary">
+              Close
+            </button>
+          </div>
+        `
+      );
+    }
+
+    function createComingSoonModal() {
+      return createModal(
+        'comingSoonModal',
+        '🚧 Coming Soon',
+        `
+          <div style="text-align: center; padding: 1rem;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">🚀</div>
+            <h4 style="margin-bottom: 1rem;">Feature Coming Soon</h4>
+            <p id="comingSoonFeature" style="color: var(--gray-600); margin-bottom: 1.5rem;">
+              This feature is currently under development.
+            </p>
+            <p style="font-size: 0.875rem; color: var(--gray-500);">
+              We're working hard to bring you the best GitLab Copilot experience.
+              Stay tuned for updates!
+            </p>
+          </div>
+        `,
+        `
+          <div style="text-align: center;">
+            <button onclick="closeModal('comingSoonModal')" class="btn btn-primary">
+              Got it
+            </button>
+          </div>
+        `
+      );
+    }
+
+    // Global functions
+    window.showComingSoon = function(featureName) {
+      const featureEl = document.getElementById('comingSoonFeature');
+      if (featureEl) {
+        featureEl.textContent = `${featureName} is currently under development and will be available in a future update.`;
+      }
+      openModal('comingSoonModal');
+    };
+  </script>
+</body>
+</html>

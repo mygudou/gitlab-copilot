@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configuration - GitLab Copilot</title>
+  <meta name="description" content="Manage your GitLab instance configurations for AI-powered development assistance.">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="/css/main.css">
+
+  <!-- Preload critical resources -->
+  <link rel="preload" href="/js/api.js" as="script">
+  <link rel="preload" href="/js/components.js" as="script">
+</head>
+<body>
+  <div id="app">
+    <!-- Content will be loaded here -->
+  </div>
+
+  <!-- Scripts -->
+  <script src="/js/api.js"></script>
+  <script src="/js/components.js"></script>
+
+  <script>
+    let userConfigs = [];
+    let editingConfigId = null;
+    let validator;
+    const DEFAULT_GITLAB_URL = 'https://gitlab.com';
+    let defaultGitlabUrl = DEFAULT_GITLAB_URL;
+
+    const sanitizeHtml = (value) => {
+      if (typeof escapeHtml === 'function') {
+        return escapeHtml(value);
+      }
+
+      if (value === null || value === undefined) {
+        return '';
+      }
+
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    };
+
+    // Initialize the configuration page
+    document.addEventListener('DOMContentLoaded', async function() {
+      const app = document.getElementById('app');
+
+      // Require authentication
+      const isAuthenticated = await Navigation.requireAuth();
+      if (!isAuthenticated) {
+        return;
+      }
+
+      // Show loading
+      app.innerHTML = createPageWrapper(
+        'GitLab Configuration',
+        'Manage your GitLab instance connections and webhook settings',
+        createSpinner('Loading your configurations...'),
+        'config'
+      );
+
+      try {
+        // Load configurations
+        await loadConfigurations();
+
+        // Render configuration page
+        app.innerHTML = createConfigurationPage();
+
+        // Setup form validation
+        setupFormValidation();
+
+      } catch (error) {
+        console.error('Configuration loading error:', error);
+        app.innerHTML = createPageWrapper(
+          'GitLab Configuration',
+          'Manage your GitLab instance connections and webhook settings',
+          createAlert('Failed to load configurations. Please refresh the page and try again.', 'error'),
+          'config'
+        );
+      }
+    });
+
+    async function loadConfigurations() {
+      try {
+        const response = await api.getGitLabConfigs();
+        userConfigs = response.configurations || [];
+        if (response.defaultGitlabUrl && typeof response.defaultGitlabUrl === 'string') {
+          defaultGitlabUrl = response.defaultGitlabUrl;
+        } else {
+          defaultGitlabUrl = DEFAULT_GITLAB_URL;
+        }
+      } catch (error) {
+        console.error('Failed to load configurations:', error);
+        userConfigs = [];
+      }
+    }
+
+    function createConfigurationPage() {
+      return createPageWrapper(
+        'GitLab Configuration',
+        'Connect your GitLab instances and manage webhook settings',
+        `
+          <!-- Add New Configuration Button -->
+          <div class="page-section page-section--centered">
+            <button onclick="showAddConfigForm()" class="btn btn-primary btn-lg">
+              ➕ 添加 GitLab 配置
+            </button>
+          </div>
+
+          <!-- Configuration Form (Hidden by default) -->
+          <div id="configFormContainer" class="page-section" style="display: none;">
+            ${createConfigurationForm()}
+          </div>
+
+          <!-- Existing Configurations -->
+          <div id="configurationsContainer" class="page-section">
+            ${createConfigurationsList()}
+          </div>
+
+          <!-- Setup Guide -->
+          ${userConfigs.length === 0 ? createSetupGuide() : ''}
+
+          <!-- Modals -->
+          ${createDeleteConfirmModal()}
+          ${createConnectionTestModal()}
+        `,
+        'config'
+      );
+    }
+
+    function createConfigurationForm() {
+      return createCard(
+        editingConfigId ? '✏️ 编辑配置' : '➕ 添加 GitLab 配置',
+        `
+          <form id="configForm" novalidate>
+            <input type="hidden" id="configId" name="configId" value="${editingConfigId || ''}">
+
+            ${createFormGroup(
+              '配置名称',
+              createInput('name', 'text', '例如: 公司GitLab, 个人项目', '', false),
+              false,
+              '给这个配置起个名字,方便识别 (可选,默认为"GitLab 配置")'
+            )}
+
+            ${createFormGroup(
+              'GitLab URL',
+              createInput(
+                'gitlabUrl',
+                'url',
+                sanitizeHtml(defaultGitlabUrl || DEFAULT_GITLAB_URL),
+                editingConfigId ? '' : sanitizeHtml(defaultGitlabUrl || DEFAULT_GITLAB_URL),
+                true
+              ),
+              true,
+              'GitLab 实例的 URL (如果使用官方 GitLab 请保持默认)'
+            )}
+
+            ${createFormGroup(
+              'Personal Access Token (PAT)',
+              createInput('accessToken', 'password', '粘贴你的 GitLab Personal Access Token', '', true),
+              true,
+              '需要 api, read_repository, write_repository 权限'
+            )}
+
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1.5rem;">
+              <button type="submit" class="btn btn-primary btn-lg">
+                ${editingConfigId ? '💾 保存配置' : '✅ 完成配置'}
+              </button>
+              <button type="button" onclick="hideConfigForm()" class="btn btn-secondary">
+                取消
+              </button>
+            </div>
+          </form>
+
+          <div style="margin-top: 2rem; padding: 1rem; background: var(--gray-50); border-radius: var(--radius-md); border-left: 4px solid var(--info-color);">
+            <strong style="color: var(--gray-800);">💡 如何获取 Personal Access Token?</strong>
+            <ol style="margin: 0.5rem 0 0 1.5rem; color: var(--gray-600); font-size: 0.875rem;">
+              <li>访问你的 GitLab 实例</li>
+              <li>进入 <strong>User Settings → Access Tokens</strong></li>
+              <li>创建新 Token,选择权限: <code>api</code>, <code>read_repository</code>, <code>write_repository</code></li>
+              <li>复制生成的 Token 粘贴到上面</li>
+            </ol>
+            <a href="https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html" target="_blank" style="display: inline-block; margin-top: 0.5rem; font-size: 0.875rem; color: var(--primary-color);">
+              📖 查看详细文档 →
+            </a>
+          </div>
+        `,
+        editingConfigId ?
+          '更新你的 GitLab 配置' :
+          '只需要填写 GitLab Token,webhook 配置将自动生成'
+      );
+    }
+
+    function createConfigurationsList() {
+      if (userConfigs.length === 0) {
+        return createEmptyState(
+          '还没有配置',
+          '添加你的第一个 GitLab 配置,开始在项目中使用 AI 助手',
+          createButton('添加配置', 'button', 'primary', '', false, 'onclick="showAddConfigForm()"')
+        );
+      }
+
+      return `
+        <div style="margin-bottom: 2rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h3 style="margin: 0;">你的 GitLab 配置 (${userConfigs.length})</h3>
+            <div style="padding: 0.5rem 1rem; background: var(--info-bg); border-radius: var(--radius-md); border-left: 3px solid var(--info-color);">
+              <span style="color: var(--gray-600); font-size: 0.875rem;">
+                💡 你可以添加多个 GitLab 配置,支持不同的 GitLab 实例或项目组
+              </span>
+            </div>
+          </div>
+          <div style="display: grid; gap: 1.5rem;">
+            ${userConfigs.map(config => createConfigCard(config)).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function createConfigCard(config) {
+      const statusColor = config.isActive ? 'var(--success-color)' : 'var(--error-color)';
+      const statusText = config.isActive ? '已启用' : '已禁用';
+      const defaultBadge = config.isDefault ? '<span style="display: inline-block; padding: 0.25rem 0.5rem; background: var(--primary-color); color: white; border-radius: var(--radius-sm); font-size: 0.75rem; margin-left: 0.5rem;">默认</span>' : '';
+
+      const configIdEscaped = sanitizeHtml(config.id);
+      const configNameEscaped = sanitizeHtml(config.name || 'GitLab 配置');
+      const gitlabUrlEscaped = sanitizeHtml(config.gitlabUrl || '未配置');
+      const webhookUrlEscaped = sanitizeHtml(config.webhookUrl || '');
+      const webhookSecretEscaped = sanitizeHtml(config.webhookSecret || '自动生成');
+      const maskedTokenEscaped = sanitizeHtml(config.maskedAccessToken || (config.hasAccessToken ? '***' : 'Not configured'));
+
+      return createCard(
+        `🔗 ${configNameEscaped}${defaultBadge}`,
+        `
+          <div style="display: grid; gap: 1.5rem;">
+            <div>
+              <strong style="color: var(--gray-700);">GitLab URL</strong>
+              <div style="font-family: monospace; background: var(--gray-100); padding: 0.75rem; border-radius: var(--radius-sm); margin-top: 0.25rem; font-size: 0.875rem;">
+                ${gitlabUrlEscaped}
+              </div>
+            </div>
+
+            <div>
+              <strong style="color: var(--gray-700);">Access Token</strong>
+              <div style="font-family: monospace; background: var(--gray-100); padding: 0.75rem; border-radius: var(--radius-sm); margin-top: 0.25rem; font-size: 0.75rem; word-break: break-all;">
+                ${maskedTokenEscaped}
+              </div>
+            </div>
+
+            <div style="border-top: 2px solid var(--gray-200); padding-top: 1rem;">
+              <strong style="color: var(--gray-800); display: block; margin-bottom: 0.75rem;">📋 Webhook 配置信息</strong>
+
+              <div style="margin-bottom: 1rem;">
+                <label style="display: block; font-weight: 500; margin-bottom: 0.5rem; color: var(--gray-600); font-size: 0.875rem;">
+                  Webhook URL
+                </label>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                  <input
+                    type="text"
+                    value="${webhookUrlEscaped}"
+                    readonly
+                    class="form-input"
+                    style="flex: 1; font-family: monospace; font-size: 0.75rem; padding: 0.5rem;"
+                  >
+                  <button onclick="copyText('${webhookUrlEscaped}', 'Webhook URL')" class="btn btn-sm btn-secondary" style="white-space: nowrap;">
+                    📋 复制
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label style="display: block; font-weight: 500; margin-bottom: 0.5rem; color: var(--gray-600); font-size: 0.875rem;">
+                  Webhook Secret
+                </label>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                  <input
+                    type="text"
+                    value="${webhookSecretEscaped}"
+                    readonly
+                    class="form-input"
+                    style="flex: 1; font-family: monospace; font-size: 0.75rem; padding: 0.5rem;"
+                  >
+                  <button onclick="copyText('${webhookSecretEscaped}', 'Webhook Secret')" class="btn btn-sm btn-secondary" style="white-space: nowrap;">
+                    📋 复制
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 0.5rem; border-top: 1px solid var(--gray-200);">
+              <div>
+                <span style="color: ${statusColor}; font-weight: 500;">
+                  ● ${statusText}
+                </span>
+                ${config.lastTested ? `
+                  <span style="color: var(--gray-500); font-size: 0.875rem; margin-left: 1rem;">
+                    最后测试: ${UI.formatTimeAgo(config.lastTested)}
+                  </span>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+        `,
+        null,
+        `
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            ${!config.isDefault ? `
+              <button
+                data-config-id="${configIdEscaped}"
+                onclick="setDefaultConfig(this.dataset.configId)"
+                class="btn btn-sm btn-secondary"
+              >
+                ⭐ 设为默认
+              </button>
+            ` : ''}
+            <button
+              data-config-id="${configIdEscaped}"
+              onclick="editConfig(this.dataset.configId)"
+              class="btn btn-sm btn-secondary"
+            >
+              ✏️ 编辑
+            </button>
+            <button
+              data-config-id="${configIdEscaped}"
+              data-config-name="${configNameEscaped}"
+              onclick="deleteConfig(this.dataset.configId, this.dataset.configName)"
+              class="btn btn-sm btn-danger"
+            >
+              🗑️ 删除
+            </button>
+          </div>
+        `
+      );
+    }
+
+    window.copyText = async function(text, label) {
+      if (!text) return;
+
+      try {
+        await navigator.clipboard.writeText(text);
+        UI.showAlert(`${label} 已复制到剪贴板`, 'success');
+      } catch (error) {
+        // Fallback
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        UI.showAlert(`${label} 已复制到剪贴板`, 'success');
+      }
+    };
+
+    function createSetupGuide() {
+      return createCard(
+        '🚀 GitLab Configuration Setup Guide',
+        `
+          <div style="margin-bottom: 2rem;">
+            <p style="color: var(--gray-600); margin-bottom: 1.5rem;">
+              Follow these steps to connect your GitLab instance with GitLab Copilot:
+            </p>
+
+            <div style="display: grid; gap: 1.5rem;">
+              ${createSetupStep(
+                '1',
+                'Create a Personal Access Token',
+                'In your GitLab instance, go to User Settings → Access Tokens and create a token with api, read_repository, and write_repository scopes.',
+                'https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html'
+              )}
+
+              ${createSetupStep(
+                '2',
+                'Generate a Webhook Secret',
+                'Create a strong random string to use as your webhook secret. This ensures only GitLab can send events to your Copilot instance.',
+                null
+              )}
+
+              ${createSetupStep(
+                '3',
+                'Add Configuration Above',
+                'Use the "Add New Configuration" button to enter your GitLab URL, access token, and webhook secret.',
+                null
+              )}
+
+              ${createSetupStep(
+                '4',
+                'Configure Project Webhooks',
+                'In your GitLab project, add a webhook pointing to your Copilot instance with the events you want to monitor.',
+                '/api'
+              )}
+            </div>
+          </div>
+        `,
+        'Complete setup to start using @claude commands in your GitLab projects'
+      );
+    }
+
+    function createSetupStep(number, title, description, link) {
+      return `
+        <div style="display: flex; align-items: flex-start; gap: 1rem; padding: 1.5rem; background: var(--gray-50); border-radius: var(--radius-lg);">
+          <div style="background: var(--primary-color); color: white; width: 2rem; height: 2rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0;">
+            ${number}
+          </div>
+          <div style="flex: 1;">
+            <h4 style="margin-bottom: 0.5rem; color: var(--gray-800);">${title}</h4>
+            <p style="color: var(--gray-600); margin-bottom: ${link ? '1rem' : '0'}; font-size: 0.875rem;">${description}</p>
+            ${link ? `
+              <a href="${link}" target="_blank" class="btn btn-sm btn-secondary">
+                📖 Learn More
+              </a>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    function createDeleteConfirmModal() {
+      return createModal(
+        'deleteConfigModal',
+        '🗑️ Delete Configuration',
+        `
+          <div style="text-align: center; padding: 1rem;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">⚠️</div>
+            <h4 style="margin-bottom: 1rem;">Confirm Deletion</h4>
+            <p id="deleteConfigMessage" style="color: var(--gray-600); margin-bottom: 1.5rem;">
+              Are you sure you want to delete this configuration?
+            </p>
+            <p style="font-size: 0.875rem; color: var(--error-color);">
+              This action cannot be undone. Any webhooks using this configuration will stop working.
+            </p>
+          </div>
+        `,
+        `
+          <div style="display: flex; gap: 1rem; justify-content: center;">
+            <button onclick="closeModal('deleteConfigModal')" class="btn btn-secondary">
+              Cancel
+            </button>
+            <button id="confirmDeleteBtn" onclick="confirmDeleteConfig()" class="btn btn-danger">
+              🗑️ Delete Configuration
+            </button>
+          </div>
+        `
+      );
+    }
+
+    function createConnectionTestModal() {
+      return createModal(
+        'connectionTestModal',
+        '🔍 Connection Test',
+        `
+          <div id="connectionTestContent">
+            <!-- Content will be updated dynamically -->
+          </div>
+        `,
+        `
+          <div style="text-align: center;">
+            <button onclick="closeModal('connectionTestModal')" class="btn btn-primary">
+              Close
+            </button>
+          </div>
+        `
+      );
+    }
+
+    function setupFormValidation() {
+      const form = document.getElementById('configForm');
+      if (!form) return;
+
+      validator = new FormValidator(form);
+
+      // Add validation rules (简化后只需要验证这两个字段)
+      validator
+        .addRule('gitlabUrl', (value) => Validators.required(value), 'GitLab URL 是必填项')
+        .addRule('gitlabUrl', (value) => Validators.url(value), '请输入有效的 URL (例如: https://gitlab.com)')
+        .addRule('accessToken', (value) => Validators.required(value), 'Personal Access Token 是必填项')
+        .addRule('accessToken', (value) => value.length >= 20, 'Token 长度应至少 20 个字符');
+
+      // Real-time validation
+      ['gitlabUrl', 'accessToken'].forEach(fieldName => {
+        const field = form.elements[fieldName];
+        if (field) {
+          field.addEventListener('blur', () => validateField(fieldName));
+          field.addEventListener('input', () => validator.clearFieldError(field));
+        }
+      });
+
+      // Form submission
+      form.addEventListener('submit', handleConfigSubmission);
+    }
+
+    function validateField(fieldName) {
+      const form = document.getElementById('configForm');
+      const field = form.elements[fieldName];
+      if (!field) return;
+
+      const value = field.value;
+      const rules = validator.rules[fieldName] || [];
+
+      for (const rule of rules) {
+        if (!rule.validator(value)) {
+          validator.showFieldError(field, rule.message);
+          return false;
+        }
+      }
+
+      validator.clearFieldError(field);
+      return true;
+    }
+
+    // Global functions for config management
+    window.showAddConfigForm = function() {
+      editingConfigId = null;
+      const container = document.getElementById('configFormContainer');
+      const form = document.getElementById('configForm');
+
+      if (container && form) {
+        container.innerHTML = createConfigurationForm();
+        container.style.display = 'block';
+        setupFormValidation();
+
+        // Scroll to form
+        container.scrollIntoView({ behavior: 'smooth' });
+      }
+    };
+
+    window.hideConfigForm = function() {
+      const container = document.getElementById('configFormContainer');
+      if (container) {
+        container.style.display = 'none';
+      }
+      editingConfigId = null;
+    };
+
+    window.editConfig = async function(configId) {
+      editingConfigId = configId;
+      const config = userConfigs.find(c => c.id === configId);
+
+      if (!config) {
+        UI.showAlert('Configuration not found.', 'error');
+        return;
+      }
+
+      const container = document.getElementById('configFormContainer');
+      if (container) {
+        container.innerHTML = createConfigurationForm();
+        container.style.display = 'block';
+        setupFormValidation();
+
+        // Populate form with existing data
+        const form = document.getElementById('configForm');
+        if (form) {
+          form.elements.name.value = config.name;
+          form.elements.gitlabUrl.value = config.gitlabUrl;
+          form.elements.description.value = config.description || '';
+          // Don't populate sensitive fields for security
+        }
+
+        container.scrollIntoView({ behavior: 'smooth' });
+      }
+    };
+
+    window.deleteConfig = function(configId, configName) {
+      const deleteBtn = document.getElementById('confirmDeleteBtn');
+      const messageEl = document.getElementById('deleteConfigMessage');
+
+      if (deleteBtn && messageEl) {
+        deleteBtn.setAttribute('data-config-id', configId);
+        messageEl.textContent = `Are you sure you want to delete the configuration "${configName}"?`;
+        openModal('deleteConfigModal');
+      }
+    };
+
+    window.confirmDeleteConfig = async function() {
+      const deleteBtn = document.getElementById('confirmDeleteBtn');
+      const configId = deleteBtn?.getAttribute('data-config-id');
+
+      if (!configId) return;
+
+      try {
+        UI.showLoading(deleteBtn, 'Deleting...');
+
+        await api.deleteGitLabConfig(configId);
+
+        UI.showAlert('Configuration deleted successfully.', 'success');
+        closeModal('deleteConfigModal');
+
+        // Reload configurations
+        await loadConfigurations();
+        refreshConfigurationsList();
+
+      } catch (error) {
+        console.error('Delete config error:', error);
+        UI.showAlert('Failed to delete configuration. Please try again.', 'error');
+      } finally {
+        UI.hideLoading(deleteBtn, '🗑️ Delete Configuration');
+      }
+    };
+
+    window.setDefaultConfig = async function(configId) {
+      try {
+        await api.setDefaultGitLabConfig(configId);
+        UI.showAlert('Default configuration updated successfully.', 'success');
+
+        // Reload configurations
+        await loadConfigurations();
+        refreshConfigurationsList();
+
+      } catch (error) {
+        console.error('Set default config error:', error);
+        UI.showAlert('Failed to set default configuration. Please try again.', 'error');
+      }
+    };
+
+    window.testConfig = async function(configId) {
+      const config = userConfigs.find(c => c.id === configId);
+      if (!config) {
+        UI.showAlert('Configuration not found.', 'error');
+        return;
+      }
+
+      const contentEl = document.getElementById('connectionTestContent');
+      if (!contentEl) return;
+
+      openModal('connectionTestModal');
+
+      const gitlabUrlEscaped = sanitizeHtml(config.gitlabUrl || '');
+
+      contentEl.innerHTML = `
+        <div style="text-align: center; padding: 2rem;">
+          <div class="spinner" style="margin-bottom: 1rem;"></div>
+          <p>Testing connection to ${gitlabUrlEscaped}...</p>
+        </div>
+      `;
+
+      try {
+        // Note: We can't test existing configs because we don't have the original tokens
+        // This would require the backend to support testing with encrypted tokens
+        contentEl.innerHTML = `
+          <div style="text-align: center; padding: 1rem;">
+            <div style="font-size: 2rem; margin-bottom: 1rem;">ℹ️</div>
+            <h4 style="margin-bottom: 1rem;">Connection Test</h4>
+            <p style="color: var(--gray-600); margin-bottom: 1rem;">
+              Connection testing for existing configurations is not available for security reasons.
+              The access tokens are encrypted and cannot be used for testing.
+            </p>
+            <p style="font-size: 0.875rem; color: var(--gray-500);">
+              To test a connection, you can edit this configuration and use the test feature
+              when entering the access token.
+            </p>
+          </div>
+        `;
+
+      } catch (error) {
+        console.error('Test config error:', error);
+        contentEl.innerHTML = `
+          <div style="text-align: center; padding: 1rem;">
+            <div style="font-size: 2rem; margin-bottom: 1rem;">❌</div>
+            <h4 style="margin-bottom: 1rem;">Connection Failed</h4>
+            <p style="color: var(--error-color);">${sanitizeHtml(error.message || 'Connection failed')}</p>
+          </div>
+        `;
+      }
+    };
+
+    window.testConnectionDraft = async function() {
+      const form = document.getElementById('configForm');
+      if (!form) return;
+
+      // Validate required fields first
+      if (!validator.validate()) {
+        UI.showAlert('Please fill in all required fields before testing.', 'error');
+        return;
+      }
+
+      const formData = new FormData(form);
+      const configData = {
+        name: formData.get('name'),
+        gitlabUrl: formData.get('gitlabUrl'),
+        accessToken: formData.get('accessToken'),
+        webhookSecret: formData.get('webhookSecret'),
+        description: formData.get('description')
+      };
+
+      const contentEl = document.getElementById('connectionTestContent');
+      if (!contentEl) return;
+
+      openModal('connectionTestModal');
+
+      const draftGitlabUrlEscaped = sanitizeHtml(configData.gitlabUrl);
+
+      contentEl.innerHTML = `
+        <div style="text-align: center; padding: 2rem;">
+          <div class="spinner" style="margin-bottom: 1rem;"></div>
+          <p>Testing connection to ${draftGitlabUrlEscaped}...</p>
+        </div>
+      `;
+
+      try {
+        const result = await api.testGitLabConnection(configData);
+
+        if (result.success) {
+          contentEl.innerHTML = `
+            <div style="text-align: center; padding: 1rem;">
+              <div style="font-size: 2rem; margin-bottom: 1rem;">✅</div>
+              <h4 style="margin-bottom: 1rem;">Connection Successful</h4>
+              <p style="color: var(--success-color);">
+                Successfully connected to ${draftGitlabUrlEscaped}
+              </p>
+              ${result.details ? `
+                <div style="background: var(--gray-50); padding: 1rem; border-radius: var(--radius-md); margin-top: 1rem; text-align: left;">
+                  <strong>Connection Details:</strong>
+                  <pre style="margin: 0.5rem 0 0 0; font-size: 0.875rem;">${sanitizeHtml(JSON.stringify(result.details, null, 2))}</pre>
+                </div>
+              ` : ''}
+            </div>
+          `;
+        } else {
+          throw new Error(result.message || 'Connection test failed');
+        }
+
+      } catch (error) {
+        console.error('Test connection error:', error);
+        contentEl.innerHTML = `
+          <div style="text-align: center; padding: 1rem;">
+            <div style="font-size: 2rem; margin-bottom: 1rem;">❌</div>
+            <h4 style="margin-bottom: 1rem;">Connection Failed</h4>
+            <p style="color: var(--error-color); margin-bottom: 1rem;">
+              ${sanitizeHtml(error.message || 'Connection failed')}
+            </p>
+            <div style="background: var(--gray-50); padding: 1rem; border-radius: var(--radius-md); text-align: left;">
+              <strong>Troubleshooting:</strong>
+              <ul style="margin: 0.5rem 0 0 0; font-size: 0.875rem;">
+                <li>Verify the GitLab URL is correct and accessible</li>
+                <li>Check that the access token has the required scopes (api, read_repository, write_repository)</li>
+                <li>Ensure the token is not expired</li>
+                <li>Confirm your GitLab instance is reachable from this server</li>
+              </ul>
+            </div>
+          </div>
+        `;
+      }
+    };
+
+    async function handleConfigSubmission(event) {
+      event.preventDefault();
+
+      const form = event.target;
+      const submitBtn = form.querySelector('button[type="submit"]');
+      const originalBtnText = submitBtn.innerHTML;
+
+      // Clear previous alerts
+      UI.clearAlerts();
+
+      // Validate form
+      if (!validator.validate()) {
+        UI.showAlert('请修复下面的错误后重试', 'error');
+        return;
+      }
+
+      try {
+        UI.showLoading(submitBtn, editingConfigId ? '保存中...' : '配置中...');
+
+        const formData = new FormData(form);
+        const configName = formData.get('name')?.trim() || '';
+
+        // 构建配置数据
+        const configData = {
+          name: configName || 'GitLab 配置', // 使用用户输入的名称或默认名称
+          gitlabUrl: formData.get('gitlabUrl').trim(),
+          accessToken: formData.get('accessToken'),
+          description: ''
+        };
+
+        // 仅在创建时添加 webhookSecret (编辑时不发送,保持原有值)
+        if (!editingConfigId) {
+          configData.webhookSecret = ''; // 后端自动生成
+        }
+
+        let result;
+        if (editingConfigId) {
+          result = await api.updateGitLabConfig(editingConfigId, configData);
+          UI.showAlert('配置更新成功!', 'success');
+        } else {
+          result = await api.createGitLabConfig(configData);
+
+          console.log('===== CREATE CONFIG RESULT =====');
+          console.log('Full result:', JSON.stringify(result, null, 2));
+          console.log('result.configuration:', result.configuration);
+          console.log('result.webhookUrl:', result.webhookUrl);
+          console.log('result.configuration.webhookSecret:', result.configuration?.webhookSecret);
+          console.log('================================');
+
+          // 显示 webhook 配置信息 - 必须在 loadConfigurations 之前调用!
+          // 延迟显示模态框,确保其他 UI 操作不会干扰
+          setTimeout(() => showWebhookConfigModal(result), 100);
+        }
+
+        // Hide form and reload configurations
+        hideConfigForm();
+
+        // 如果是创建配置,先不要重新加载列表(避免干扰模态框)
+        if (editingConfigId) {
+          await loadConfigurations();
+          refreshConfigurationsList();
+        }
+
+      } catch (error) {
+        console.error('Config submission error:', error);
+        let errorMessage = editingConfigId ? '更新配置失败' : '添加配置失败';
+
+        if (error instanceof APIError) {
+          errorMessage = error.message;
+        }
+
+        UI.showAlert(errorMessage, 'error');
+      } finally {
+        UI.hideLoading(submitBtn, originalBtnText);
+      }
+    }
+
+    function showWebhookConfigModal(result) {
+      console.log('Webhook config result:', result);
+
+      // result is already the 'data' object from the API response
+      const webhookUrl = result.webhookUrl;
+      const webhookSecret = result.configuration?.webhookSecret;
+
+      console.log('Webhook URL:', webhookUrl);
+      console.log('Webhook Secret:', webhookSecret);
+
+      if (!webhookUrl || !webhookSecret) {
+        console.error('Missing webhook info:', { webhookUrl, webhookSecret, result });
+        UI.showAlert('配置成功,但无法获取 webhook 信息。请查看浏览器控制台了解详情。', 'warning');
+        return;
+      }
+
+      const modalHtml = createModal(
+        'webhookConfigModal',
+        '🎉 配置成功!',
+        `
+          <div style="padding: 1rem;">
+            <div style="text-align: center; margin-bottom: 2rem;">
+              <div style="font-size: 4rem; margin-bottom: 1rem;">✅</div>
+              <h3 style="color: var(--success-color); margin-bottom: 0.5rem;">GitLab 配置已完成</h3>
+              <p style="color: var(--gray-600);">现在需要在 GitLab 项目中配置 Webhook</p>
+            </div>
+
+            <div style="margin-bottom: 2rem;">
+              <h4 style="margin-bottom: 1rem; color: var(--gray-800);">📋 Webhook 配置信息</h4>
+
+              <div style="margin-bottom: 1.5rem;">
+                <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: var(--gray-700);">
+                  Webhook URL
+                </label>
+                <div style="display: flex; gap: 0.5rem;">
+                  <input
+                    type="text"
+                    id="webhookUrlInput"
+                    value="${webhookUrl}"
+                    readonly
+                    class="form-input"
+                    style="flex: 1; font-family: monospace; font-size: 0.875rem;"
+                  >
+                  <button onclick="copyToClipboard('webhookUrlInput', 'URL')" class="btn btn-secondary">
+                    📋 复制
+                  </button>
+                </div>
+              </div>
+
+              <div style="margin-bottom: 1.5rem;">
+                <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: var(--gray-700);">
+                  Secret Token
+                </label>
+                <div style="display: flex; gap: 0.5rem;">
+                  <input
+                    type="text"
+                    id="webhookSecretInput"
+                    value="${webhookSecret}"
+                    readonly
+                    class="form-input"
+                    style="flex: 1; font-family: monospace; font-size: 0.875rem;"
+                  >
+                  <button onclick="copyToClipboard('webhookSecretInput', 'Secret')" class="btn btn-secondary">
+                    📋 复制
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div style="background: var(--gray-50); padding: 1.5rem; border-radius: var(--radius-md); border-left: 4px solid var(--primary-color);">
+              <h4 style="margin-bottom: 1rem; color: var(--gray-800);">🔧 在 GitLab 中配置 Webhook</h4>
+              <ol style="margin: 0; padding-left: 1.5rem; color: var(--gray-600); line-height: 1.8;">
+                <li>进入你的 GitLab 项目</li>
+                <li>导航到 <strong>Settings → Webhooks</strong></li>
+                <li>将上面的 <strong>Webhook URL</strong> 粘贴到 URL 字段</li>
+                <li>将 <strong>Secret Token</strong> 粘贴到 Secret token 字段</li>
+                <li>选择触发事件:
+                  <ul style="margin-top: 0.5rem;">
+                    <li>✅ Issues events</li>
+                    <li>✅ Merge request events</li>
+                    <li>✅ Comments</li>
+                  </ul>
+                </li>
+                <li>点击 <strong>Add webhook</strong> 完成配置</li>
+              </ol>
+            </div>
+
+            <div style="margin-top: 1.5rem; padding: 1rem; background: var(--warning-bg); border-radius: var(--radius-md); border-left: 4px solid var(--warning-color);">
+              <strong style="color: var(--warning-color);">⚠️ 重要提示</strong>
+              <p style="margin: 0.5rem 0 0 0; color: var(--gray-700); font-size: 0.875rem;">
+                请妥善保存 Secret Token,关闭此窗口后将无法再次查看。如果丢失,需要重新创建配置。
+              </p>
+            </div>
+          </div>
+        `,
+        `
+          <div style="text-align: center;">
+            <button onclick="closeWebhookModal()" class="btn btn-primary btn-lg">
+              我已完成配置
+            </button>
+          </div>
+        `
+      );
+
+      // Add modal to page if not exists
+      let modalContainer = document.getElementById('webhookConfigModalContainer');
+      if (!modalContainer) {
+        modalContainer = document.createElement('div');
+        modalContainer.id = 'webhookConfigModalContainer';
+        document.body.appendChild(modalContainer);
+      }
+      modalContainer.innerHTML = modalHtml;
+
+      // Open modal
+      setTimeout(() => openModal('webhookConfigModal'), 100);
+    }
+
+    window.copyToClipboard = async function(inputId, label) {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+
+      try {
+        await navigator.clipboard.writeText(input.value);
+        UI.showAlert(`${label} 已复制到剪贴板`, 'success');
+      } catch (error) {
+        // Fallback for browsers that don't support clipboard API
+        input.select();
+        document.execCommand('copy');
+        UI.showAlert(`${label} 已复制到剪贴板`, 'success');
+      }
+    };
+
+    window.closeWebhookModal = async function() {
+      closeModal('webhookConfigModal');
+      // 关闭模态框后刷新配置列表
+      await loadConfigurations();
+      refreshConfigurationsList();
+    };
+
+    function refreshConfigurationsList() {
+      const container = document.getElementById('configurationsContainer');
+      if (container) {
+        container.innerHTML = createConfigurationsList();
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitLab Copilot - AI-Powered Development Assistant</title>
+  <meta name="description" content="Seamlessly integrate AI assistance into your GitLab workflow with intelligent code suggestions and automated development support.">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="/css/main.css">
+
+  <!-- Preload critical resources -->
+  <link rel="preload" href="/js/api.js" as="script">
+  <link rel="preload" href="/js/components.js" as="script">
+</head>
+<body>
+  <div id="app">
+    <!-- Content will be loaded here -->
+  </div>
+
+  <!-- Scripts -->
+  <script src="/js/api.js"></script>
+  <script src="/js/components.js"></script>
+
+  <script>
+    // Initialize the landing page
+    document.addEventListener('DOMContentLoaded', async function() {
+      const app = document.getElementById('app');
+
+      // Check if user is already authenticated
+      if (api.isAuthenticated()) {
+        // Validate token and redirect to dashboard if valid
+        const validation = await api.validateToken();
+        if (validation.valid) {
+          Navigation.redirectToDashboard();
+          return;
+        } else {
+          // Clear invalid tokens
+          api.clearTokens();
+        }
+      }
+
+      // Render landing page
+      app.innerHTML = createLandingPage();
+    });
+
+    function createLandingPage() {
+      const basePath = window.location.pathname.includes('/auth') ? '/auth' : '';
+
+      return createPageWrapper(
+        'GitLab Copilot',
+        'AI-powered development assistant that integrates seamlessly with your GitLab workflow',
+        `
+          <section class="landing-hero">
+            <div class="landing-hero-content">
+              <span class="landing-pill landing-hero-eyebrow">
+                <span class="landing-pill-dot"></span>
+                AI for GitLab Teams
+              </span>
+              <h1 class="landing-hero-title">GitLab Copilot · 现代协作体验</h1>
+              <p class="landing-hero-copy">
+                将 GitLab 的 Issue、Merge Request 与流水线接入 AI，让团队以统一的现代设计语言打造流畅体验推进每一次迭代。
+              </p>
+              <div class="landing-hero-actions">
+                <a href="${basePath}/register" class="btn btn-primary btn-lg">
+                  立即上手
+                </a>
+                <a href="${basePath}/docs" class="btn btn-secondary btn-lg">
+                  查看文档
+                </a>
+                <span class="landing-hero-note">
+                  3 分钟完成部署
+                  <a href="${basePath}/login">已有账户？登录</a>
+                </span>
+              </div>
+              <div class="landing-hero-metrics">
+                <div class="landing-metric">
+                  <span class="landing-metric-value">2×</span>
+                  <span class="landing-metric-label">交付节奏提升</span>
+                </div>
+                <div class="landing-metric">
+                  <span class="landing-metric-value">85%</span>
+                  <span class="landing-metric-label">评审自动化覆盖</span>
+                </div>
+                <div class="landing-metric">
+                  <span class="landing-metric-value">24/7</span>
+                  <span class="landing-metric-label">全天候 GitLab 守护</span>
+                </div>
+              </div>
+            </div>
+            <div class="landing-hero-visual">
+              <div class="landing-hero-glow"></div>
+              <div class="landing-hero-card">
+                <div class="landing-hero-card__chips">
+                  <span class="landing-pill landing-pill--accent">
+                    <span class="landing-pill-dot"></span>
+                    Merge Request #214
+                  </span>
+                  <span class="landing-pill landing-pill--glass">
+                    <span class="landing-pill-dot"></span>
+                    Claude · Streaming
+                  </span>
+                </div>
+                <h3 class="landing-hero-card__title">自动评审正在生成</h3>
+                <p class="landing-hero-card__subtitle">
+                  实时分析 14 个文件差异，输出可直接提交的结构化建议。
+                </p>
+                <div class="landing-hero-card__timeline">
+                  <div class="landing-hero-card__step">
+                    <span class="landing-hero-card__step-dot is-active"></span>
+                    <div>
+                      <p class="landing-hero-card__step-title">语义理解完成</p>
+                      <p class="landing-hero-card__step-desc">识别高风险改动并补充测试清单。</p>
+                    </div>
+                  </div>
+                  <div class="landing-hero-card__step">
+                    <span class="landing-hero-card__step-dot"></span>
+                    <div>
+                      <p class="landing-hero-card__step-title">生成结构化评论</p>
+                      <p class="landing-hero-card__step-desc">自动撰写代码级建议与可执行任务。</p>
+                    </div>
+                  </div>
+                  <div class="landing-hero-card__step">
+                    <span class="landing-hero-card__step-dot"></span>
+                    <div>
+                      <p class="landing-hero-card__step-title">推送到 GitLab</p>
+                      <p class="landing-hero-card__step-desc">同步到 MR 讨论区并关联负责人。</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="landing-hero-card__footer">
+                  <div class="landing-hero-card__avatars">
+                    <span class="landing-avatar">AC</span>
+                    <span class="landing-avatar landing-avatar--ghost">UX</span>
+                    <span class="landing-avatar landing-avatar--ghost">FE</span>
+                  </div>
+                  <span class="landing-hero-card__footer-note">团队实时收到 AI 评审进度</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="landing-section">
+            <div class="landing-section-heading">
+              <span class="landing-pill landing-pill--glass">
+                <span class="landing-pill-dot"></span>
+                Powerful Features
+              </span>
+              <h2 class="landing-section-title">核心能力</h2>
+              <p class="landing-section-subtitle">
+                以现代产品设计风格打造流畅体验，覆盖从需求到交付的关键场景，帮你构建真正智能的 GitLab 流程。
+              </p>
+            </div>
+            <div class="landing-grid landing-grid--features">
+              ${createFeatureCard(
+                '🎯',
+                '智能上下文理解',
+                '自动提取 Issue、MR 与代码差异的真实诉求，给出结构化的建议与行动项。'
+              )}
+
+              ${createFeatureCard(
+                '🔗',
+                '多实例无缝集成',
+                '安全管理多个 GitLab 实例和 Token，跨团队项目统一接入同一套 Copilot 能力。'
+              )}
+
+              ${createFeatureCard(
+                '🛡️',
+                '企业级安全',
+                '端到端加密存储、细粒度角色权限与审计日志，保障敏感代码只留在你的环境。'
+              )}
+
+              ${createFeatureCard(
+                '⚡',
+                '实时流式反馈',
+                'Webhook 触发后秒级响应，处理过程通过流式评论与通知实时同步给相关人。'
+              )}
+
+              ${createFeatureCard(
+                '🧠',
+                '模型智选',
+                '根据任务内容与团队策略自动挑选 Claude、GPT、Gemini 等模型组合。'
+              )}
+
+              ${createFeatureCard(
+                '🔧',
+                '一站式配置体验',
+                '引导式向导、预检测试与诊断面板，3 分钟完成部署并持续稳定运行。'
+              )}
+            </div>
+          </section>
+
+          <section class="landing-section landing-section--steps">
+            <div class="landing-section-heading">
+              <span class="landing-pill landing-pill--glass">
+                <span class="landing-pill-dot"></span>
+                How it works
+              </span>
+              <h2 class="landing-section-title">三步完成部署</h2>
+              <p class="landing-section-subtitle">
+                全图形化界面，支持自托管运行，帮助团队快速落地 AI 协作流程。
+              </p>
+            </div>
+            <div class="landing-steps">
+              ${createStepCard(
+                '01',
+                '注册并连接 GitLab',
+                '创建账户、录入实例与 Access Token，完成密钥验证。'
+              )}
+
+              ${createStepCard(
+                '02',
+                '配置 Webhook',
+                '选择需要监听的项目与事件，并通过测试按钮验证传输链路。'
+              )}
+
+              ${createStepCard(
+                '03',
+                '在 GitLab 内呼叫 AI',
+                '在 Issue、评论或 MR 中 @claude / @codex，享受实时的智能协助。'
+              )}
+
+              ${createStepCard(
+                '04',
+                '监控与调优',
+                '通过 Dashboard 观察成功率与调用量，按团队策略调整 Prompt 与模型。'
+              )}
+            </div>
+          </section>
+
+          <section class="landing-section landing-section--cta">
+            <div class="landing-cta">
+              <div class="landing-cta-content">
+                <span class="landing-pill landing-pill--glass">
+                  <span class="landing-pill-dot"></span>
+                  Ready for next sprint
+                </span>
+                <h2>把现代协作体验带入 GitLab</h2>
+                <p>部署 GitLab Copilot，自托管环境即可获得智能评审、Issue 助手与流水线建议。</p>
+              </div>
+              <div class="landing-cta-actions">
+                <a href="${basePath}/register" class="btn btn-primary btn-lg">
+                  创建账户
+                </a>
+                <a href="${basePath}/config" class="btn btn-secondary btn-lg">
+                  查看配置示例
+                </a>
+              </div>
+            </div>
+          </section>
+        `,
+        'home',
+        {
+          layout: 'landing',
+          hidePageHeader: true,
+          containerClass: 'landing-container'
+        }
+      );
+    }
+
+    function createFeatureCard(icon, title, description) {
+      return `
+        <article class="feature-card">
+          <div class="feature-card__icon">${icon}</div>
+          <h3 class="feature-card__title">${title}</h3>
+          <p class="feature-card__description">${description}</p>
+        </article>
+      `;
+    }
+
+    function createStepCard(number, title, description) {
+      return `
+        <article class="step-card">
+          <div class="step-card__index">${number}</div>
+          <div>
+            <h3 class="step-card__title">${title}</h3>
+            <p class="step-card__description">${description}</p>
+          </div>
+        </article>
+      `;
+    }
+  </script>
+</body>
+</html>

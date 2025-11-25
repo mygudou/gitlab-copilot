@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register - GitLab Copilot</title>
+  <meta name="description" content="Create your GitLab Copilot account to start using AI-powered development assistance.">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="/css/main.css">
+
+  <!-- Preload critical resources -->
+  <link rel="preload" href="/js/api.js" as="script">
+  <link rel="preload" href="/js/components.js" as="script">
+</head>
+<body>
+  <div id="app">
+    <!-- Content will be loaded here -->
+  </div>
+
+  <!-- Scripts -->
+  <script src="/js/api.js"></script>
+  <script src="/js/components.js"></script>
+
+  <script>
+    let validator;
+
+    // Initialize the registration page
+    document.addEventListener('DOMContentLoaded', async function() {
+      const app = document.getElementById('app');
+
+      // Redirect if already authenticated
+      if (!(await Navigation.requireNoAuth())) {
+        return;
+      }
+
+      // Render registration page
+      app.innerHTML = createRegistrationPage();
+
+      // Initialize form validation
+      setupFormValidation();
+    });
+
+    function createRegistrationPage() {
+      const basePath = window.location.pathname.includes('/auth') ? '/auth' : '';
+
+      return createPageWrapper(
+        'Create Your Account',
+        'Join GitLab Copilot and start leveraging AI assistance in your development workflow',
+        `
+          <div style="max-width: 500px; margin: 0 auto;">
+            ${createCard(
+              null,
+              `
+                <form id="registrationForm" novalidate>
+                  ${createFormGroup(
+                    'Username',
+                    createInput('username', 'text', 'Enter your username', '', true, 'autocomplete="username"'),
+                    true,
+                    'Choose a unique username (3-30 characters, letters, numbers, and underscores only)'
+                  )}
+
+                  ${createFormGroup(
+                    'Email Address',
+                    createInput('email', 'email', 'Enter your email address', '', true, 'autocomplete="email"'),
+                    true,
+                    'We\'ll use this for account verification and important notifications'
+                  )}
+
+                  ${createFormGroup(
+                    'Password',
+                    createInput('password', 'password', 'Create a strong password', '', true, 'autocomplete="new-password"'),
+                    true,
+                    'Minimum 8 characters with at least one letter, number, and special character'
+                  )}
+
+                  ${createFormGroup(
+                    'Confirm Password',
+                    createInput('confirmPassword', 'password', 'Confirm your password', '', true, 'autocomplete="new-password"'),
+                    true,
+                    'Re-enter your password to confirm'
+                  )}
+
+                  <div class="form-group">
+                    <label style="display: flex; align-items: flex-start; gap: 0.5rem; cursor: pointer;">
+                      <input type="checkbox" id="agreeTerms" name="agreeTerms" required style="margin-top: 0.25rem;">
+                      <span style="font-size: 0.875rem; color: var(--gray-600); line-height: 1.5;">
+                        I agree to the Terms of Service and Privacy Policy. I understand that my GitLab
+                        configuration data will be securely encrypted and stored.
+                      </span>
+                    </label>
+                  </div>
+
+                  <div style="margin-bottom: 1.5rem;">
+                    ${createButton('Create Account', 'submit', 'primary', 'lg', false, 'style="width: 100%;"')}
+                  </div>
+
+                  <div style="text-align: center; color: var(--gray-600);">
+                    Already have an account?
+                    <a href="${basePath}/login" style="color: var(--primary-color); font-weight: 500;">
+                      Sign in here
+                    </a>
+                  </div>
+                </form>
+              `
+            )}
+
+            <!-- Security Notice -->
+            <div style="margin-top: 2rem;">
+              ${createAlert(
+                `<strong>Security First:</strong> Your data is protected with enterprise-grade encryption.
+                 GitLab tokens and webhook secrets are encrypted before storage and never logged in plain text.`,
+                'info',
+                false
+              )}
+            </div>
+
+            <!-- Help Section -->
+            <div style="margin-top: 2rem;">
+              ${createCard(
+                'Need Help?',
+                `
+                  <div style="display: grid; gap: 1rem;">
+                    <div>
+                      <strong>🔧 Setup Questions:</strong>
+                      <p style="margin: 0.5rem 0 0 0; color: var(--gray-600);">
+                        Check our <a href="/docs" target="_blank">API documentation</a> for detailed setup instructions.
+                      </p>
+                    </div>
+                    <div>
+                      <strong>🛡️ Security Concerns:</strong>
+                      <p style="margin: 0.5rem 0 0 0; color: var(--gray-600);">
+                        All sensitive data is encrypted using industry-standard algorithms. Your GitLab tokens never leave your secure environment.
+                      </p>
+                    </div>
+                    <div>
+                      <strong>📝 Integration Guide:</strong>
+                      <p style="margin: 0.5rem 0 0 0; color: var(--gray-600);">
+                        Learn how to configure GitLab webhooks and start using @claude commands in your projects.
+                      </p>
+                    </div>
+                  </div>
+                `
+              )}
+            </div>
+          </div>
+        `,
+        'register'
+      );
+    }
+
+    function setupFormValidation() {
+      const form = document.getElementById('registrationForm');
+      if (!form) return;
+
+      validator = new FormValidator(form);
+
+      // Add validation rules
+      validator
+        .addRule('username', (value) => Validators.required(value), 'Username is required')
+        .addRule('username', (value) => Validators.username(value), 'Username must be 3-30 characters (letters, numbers, and underscores only)')
+        .addRule('email', (value) => Validators.required(value), 'Email address is required')
+        .addRule('email', (value) => Validators.email(value), 'Please enter a valid email address')
+        .addRule('password', (value) => Validators.required(value), 'Password is required')
+        .addRule('password', (value) => Validators.password(value), 'Password must be at least 8 characters with letters, numbers, and special characters')
+        .addRule('confirmPassword', (value) => Validators.required(value), 'Please confirm your password')
+        .addRule('confirmPassword', (value) => {
+          const password = form.elements.password.value;
+          return value === password;
+        }, 'Passwords do not match')
+        .addRule('agreeTerms', (value) => value === 'on' || value === true, 'You must agree to the terms and conditions');
+
+      // Real-time validation
+      ['username', 'email', 'password', 'confirmPassword'].forEach(fieldName => {
+        const field = form.elements[fieldName];
+        if (field) {
+          field.addEventListener('blur', () => {
+            validateField(fieldName);
+          });
+
+          field.addEventListener('input', () => {
+            // Clear error state on input
+            validator.clearFieldError(field);
+          });
+        }
+      });
+
+      // Form submission
+      form.addEventListener('submit', handleRegistration);
+    }
+
+    function validateField(fieldName) {
+      const form = document.getElementById('registrationForm');
+      const field = form.elements[fieldName];
+      if (!field) return;
+
+      const value = field.value;
+      const rules = validator.rules[fieldName] || [];
+
+      for (const rule of rules) {
+        if (!rule.validator(value)) {
+          validator.showFieldError(field, rule.message);
+          return false;
+        }
+      }
+
+      validator.clearFieldError(field);
+      field.classList.add('success');
+      return true;
+    }
+
+    async function handleRegistration(event) {
+      event.preventDefault();
+
+      const form = event.target;
+      const submitBtn = form.querySelector('button[type="submit"]');
+      const originalBtnText = submitBtn.innerHTML;
+
+      // Clear previous alerts
+      UI.clearAlerts();
+
+      // Validate form
+      if (!validator.validate()) {
+        UI.showAlert('Please fix the errors below and try again.', 'error');
+        return;
+      }
+
+      try {
+        // Show loading state
+        UI.showLoading(submitBtn, 'Creating Account...');
+
+        // Prepare registration data
+        const formData = new FormData(form);
+        const registrationData = {
+          username: formData.get('username').trim(),
+          email: formData.get('email').trim(),
+          password: formData.get('password'),
+          confirmPassword: formData.get('confirmPassword')
+        };
+
+        // Call registration API
+        const result = await api.register(registrationData);
+
+        // Show success message
+        UI.showAlert(
+          `Registration successful! Welcome to GitLab Copilot, ${registrationData.username}!
+           Your user token is: <code style="background: var(--gray-100); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-family: monospace;">${result.userToken}</code>`,
+          'success'
+        );
+
+        // Clear form
+        form.reset();
+        validator.clearAllErrors();
+
+        // Redirect to login after a delay
+        setTimeout(() => {
+          const basePath = window.location.pathname.includes('/auth') ? '/auth' : '';
+          Navigation.redirectTo(`${basePath}/login`);
+        }, 3000);
+
+      } catch (error) {
+        console.error('Registration error:', error);
+
+        let errorMessage = 'Registration failed. Please try again.';
+
+        if (error instanceof APIError) {
+          errorMessage = error.message;
+
+          // Handle specific field errors
+          if (error.data?.error?.field) {
+            const field = form.elements[error.data.error.field];
+            if (field) {
+              validator.showFieldError(field, error.message);
+              UI.showAlert('Please fix the error below and try again.', 'error');
+              return;
+            }
+          }
+        }
+
+        UI.showAlert(errorMessage, 'error');
+      } finally {
+        // Hide loading state
+        UI.hideLoading(submitBtn, originalBtnText);
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,111 @@
+import type { ExecutionScenario } from './aiExecution';
+import type { SpecKitStage } from './session';
+
+export interface GitLabProject {
+  id: number;
+  name: string;
+  web_url: string;
+  default_branch: string;
+  ssh_url_to_repo?: string;
+  http_url_to_repo?: string;
+  // Additional fields that may be present in webhook data
+  http_url?: string;
+  git_http_url?: string;
+  git_ssh_url?: string;
+  url?: string;
+  ssh_url?: string;
+  description?: string | null;
+  avatar_url?: string | null;
+  namespace?: string;
+  visibility_level?: number;
+  path_with_namespace?: string;
+  ci_config_path?: string;
+  homepage?: string;
+}
+
+export interface GitLabUser {
+  id: number;
+  name: string;
+  username: string;
+  email: string;
+}
+
+export interface GitLabIssue {
+  id: number;
+  iid: number;
+  title: string;
+  description: string;
+  state: string;
+  web_url: string;
+  author: GitLabUser;
+}
+
+export interface GitLabMergeRequest {
+  id: number;
+  iid: number;
+  title: string;
+  description: string;
+  state: string;
+  web_url: string;
+  source_branch: string;
+  target_branch: string;
+  author: GitLabUser;
+  changes_count?: number;
+  additions?: number;
+  deletions?: number;
+}
+
+export interface GitLabNote {
+  id: number;
+  body: string;
+  author: GitLabUser;
+  created_at: string;
+  noteable_type: 'Issue' | 'MergeRequest';
+  noteable_id?: number;
+}
+
+// GitLab API response types
+export interface GitLabComment {
+  id: number;
+  body: string;
+  author: GitLabUser;
+  created_at: string;
+  updated_at: string;
+  system: boolean;
+  resolvable: boolean;
+  resolved: boolean;
+}
+
+export interface GitLabBranch {
+  name: string;
+  commit: {
+    id: string;
+    message: string;
+    timestamp: string;
+  };
+  protected: boolean;
+  default: boolean;
+}
+
+export interface GitLabWebhookEvent {
+  object_kind: 'issue' | 'merge_request' | 'note';
+  event_type?: string;
+  user: GitLabUser;
+  project: GitLabProject;
+  object_attributes: Record<string, unknown>;
+  issue?: GitLabIssue;
+  merge_request?: GitLabMergeRequest;
+  repository?: Record<string, unknown>;
+}
+
+export interface AiInstruction {
+  command: string;
+  context: string;
+  fullContext?: string; // Complete text including content before and after @claude
+  files?: string[];
+  branch?: string;
+  tag?: string;
+  provider?: 'claude' | 'codex';
+  scenario?: ExecutionScenario;
+  specKitCommand?: SpecKitStage;
+}

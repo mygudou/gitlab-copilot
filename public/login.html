@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign In - GitLab Copilot</title>
+  <meta name="description" content="Sign in to your GitLab Copilot account to access AI-powered development assistance.">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="/css/main.css">
+
+  <!-- Preload critical resources -->
+  <link rel="preload" href="/js/api.js" as="script">
+  <link rel="preload" href="/js/components.js" as="script">
+</head>
+<body>
+  <div id="app">
+    <!-- Content will be loaded here -->
+  </div>
+
+  <!-- Scripts -->
+  <script src="/js/api.js"></script>
+  <script src="/js/components.js"></script>
+
+  <script>
+    let validator;
+
+    // Initialize the login page
+    document.addEventListener('DOMContentLoaded', async function() {
+      const app = document.getElementById('app');
+
+      // Redirect if already authenticated
+      const shouldStayOnLogin = await Navigation.requireNoAuth();
+      if (!shouldStayOnLogin) {
+        return;
+      }
+
+      // Render login page
+      app.innerHTML = createLoginPage();
+
+      // Initialize form validation
+      setupFormValidation();
+
+      // Focus on the identifier field
+      const identifierField = document.getElementById('identifier');
+      if (identifierField) {
+        identifierField.focus();
+      }
+    });
+
+    function createLoginPage() {
+      const basePath = window.location.pathname.includes('/auth') ? '/auth' : '';
+
+      return createPageWrapper(
+        'Welcome Back',
+        'Sign in to your GitLab Copilot account',
+        `
+          <div style="max-width: 450px; margin: 0 auto;">
+            ${createCard(
+              null,
+              `
+                <form id="loginForm" novalidate>
+                  ${createFormGroup(
+                    'Username or Email',
+                    createInput('identifier', 'text', 'Enter your username or email', '', true, 'autocomplete="username"'),
+                    true,
+                    'You can use either your username or email address to sign in'
+                  )}
+
+                  ${createFormGroup(
+                    'Password',
+                    createInput('password', 'password', 'Enter your password', '', true, 'autocomplete="current-password"'),
+                    true
+                  )}
+
+                  <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.875rem;">
+                      <input type="checkbox" id="rememberMe" name="rememberMe">
+                      <span>Keep me signed in for 7 days</span>
+                    </label>
+                  </div>
+
+                  <div style="margin-bottom: 1.5rem;">
+                    ${createButton('Sign In', 'submit', 'primary', 'lg', false, 'style="width: 100%;"')}
+                  </div>
+
+                  <div style="text-align: center; color: var(--gray-600); margin-bottom: 1rem;">
+                    Don't have an account?
+                    <a href="${basePath}/register" style="color: var(--primary-color); font-weight: 500;">
+                      Create one here
+                    </a>
+                  </div>
+
+                  <div style="text-align: center;">
+                    <a href="#" onclick="showForgotPassword()" style="color: var(--gray-500); font-size: 0.875rem;">
+                      Forgot your password?
+                    </a>
+                  </div>
+                </form>
+              `
+            )}
+
+            <!-- Quick Start Guide -->
+            <div style="margin-top: 2rem;">
+              ${createCard(
+                '🚀 Quick Start',
+                `
+                  <div style="font-size: 0.875rem; color: var(--gray-600); line-height: 1.6;">
+                    <p style="margin-bottom: 1rem;">
+                      <strong>New to GitLab Copilot?</strong> Here's what you can do after signing in:
+                    </p>
+                    <ol style="margin: 0; padding-left: 1.5rem;">
+                      <li style="margin-bottom: 0.5rem;">Add your GitLab instance configuration</li>
+                      <li style="margin-bottom: 0.5rem;">Configure webhooks to receive GitLab events</li>
+                      <li style="margin-bottom: 0.5rem;">Start using @claude commands in your projects</li>
+                      <li>Get AI-powered assistance for code reviews and development</li>
+                    </ol>
+                  </div>
+                `
+              )}
+            </div>
+
+            <!-- Security Info -->
+            <div style="margin-top: 1.5rem;">
+              ${createAlert(
+                `<strong>🛡️ Secure Access:</strong> Your login is protected with secure authentication tokens and encrypted data storage.`,
+                'info',
+                false
+              )}
+            </div>
+          </div>
+
+          <!-- Forgot Password Modal -->
+          ${createModal(
+            'forgotPasswordModal',
+            'Password Recovery',
+            `
+              <div style="text-align: center; padding: 1rem;">
+                <div style="font-size: 2rem; margin-bottom: 1rem;">🔑</div>
+                <h4 style="margin-bottom: 1rem;">Password Recovery</h4>
+                <p style="color: var(--gray-600); margin-bottom: 1.5rem;">
+                  Password recovery is currently handled through your system administrator.
+                  Please contact your GitLab Copilot administrator for assistance with password reset.
+                </p>
+                <p style="font-size: 0.875rem; color: var(--gray-500);">
+                  For security reasons, password resets require administrative approval.
+                </p>
+              </div>
+            `,
+            `
+              <div style="text-align: center;">
+                <button onclick="closeModal('forgotPasswordModal')" class="btn btn-primary">
+                  Got it
+                </button>
+              </div>
+            `
+          )}
+        `,
+        'login'
+      );
+    }
+
+    function setupFormValidation() {
+      const form = document.getElementById('loginForm');
+      if (!form) return;
+
+      validator = new FormValidator(form);
+
+      // Add validation rules
+      validator
+        .addRule('identifier', (value) => Validators.required(value), 'Username or email is required')
+        .addRule('password', (value) => Validators.required(value), 'Password is required');
+
+      // Real-time validation
+      ['identifier', 'password'].forEach(fieldName => {
+        const field = form.elements[fieldName];
+        if (field) {
+          field.addEventListener('blur', () => {
+            validateField(fieldName);
+          });
+
+          field.addEventListener('input', () => {
+            // Clear error state on input
+            validator.clearFieldError(field);
+          });
+        }
+      });
+
+      // Form submission
+      form.addEventListener('submit', handleLogin);
+
+      // Enter key support
+      form.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+          form.dispatchEvent(new Event('submit'));
+        }
+      });
+    }
+
+    function validateField(fieldName) {
+      const form = document.getElementById('loginForm');
+      const field = form.elements[fieldName];
+      if (!field) return;
+
+      const value = field.value;
+      const rules = validator.rules[fieldName] || [];
+
+      for (const rule of rules) {
+        if (!rule.validator(value)) {
+          validator.showFieldError(field, rule.message);
+          return false;
+        }
+      }
+
+      validator.clearFieldError(field);
+      return true;
+    }
+
+    async function handleLogin(event) {
+      event.preventDefault();
+
+      const form = event.target;
+      const submitBtn = form.querySelector('button[type="submit"]');
+      const originalBtnText = submitBtn.innerHTML;
+
+      // Clear previous alerts
+      UI.clearAlerts();
+
+      // Validate form
+      if (!validator.validate()) {
+        return;
+      }
+
+      try {
+        // Show loading state
+        UI.showLoading(submitBtn, 'Signing In...');
+
+        // Prepare login data
+        const formData = new FormData(form);
+        const loginData = {
+          identifier: formData.get('identifier').trim(),
+          password: formData.get('password')
+        };
+
+        // Call login API
+        const result = await api.login(loginData);
+
+        // Show success message
+        UI.showAlert(
+          `Welcome back, ${result.user.username}! Redirecting to your dashboard...`,
+          'success'
+        );
+
+        // Store user info temporarily for welcome message
+        sessionStorage.setItem('justLoggedIn', 'true');
+        sessionStorage.setItem('username', result.user.username);
+
+        // Redirect to dashboard
+        setTimeout(() => {
+          Navigation.redirectToDashboard();
+        }, 1500);
+
+      } catch (error) {
+        console.error('Login error:', error);
+
+        let errorMessage = 'Sign in failed. Please check your credentials and try again.';
+
+        if (error instanceof APIError) {
+          switch (error.status) {
+            case 401:
+              errorMessage = 'Invalid username or password. Please try again.';
+              break;
+            case 429:
+              errorMessage = 'Too many login attempts. Please wait a few minutes and try again.';
+              break;
+            case 403:
+              errorMessage = 'Your account has been locked. Please contact your administrator.';
+              break;
+            default:
+              errorMessage = error.message || errorMessage;
+          }
+
+          // Handle specific field errors
+          if (error.data?.error?.field) {
+            const field = form.elements[error.data.error.field];
+            if (field) {
+              validator.showFieldError(field, error.message);
+              return;
+            }
+          }
+        }
+
+        UI.showAlert(errorMessage, 'error');
+
+        // Clear password field on error
+        const passwordField = form.elements.password;
+        if (passwordField) {
+          passwordField.value = '';
+          passwordField.focus();
+        }
+
+      } finally {
+        // Hide loading state
+        UI.hideLoading(submitBtn, originalBtnText);
+      }
+    }
+
+    function showForgotPassword() {
+      openModal('forgotPasswordModal');
+    }
+  </script>
+</body>
+</html>

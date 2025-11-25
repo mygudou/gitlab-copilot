@@ -1,0 +1,58 @@
+services:
+  gitlab-copilot:
+    build: .
+    container_name: gitlab-copilot
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    environment:
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
+      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}
+      - GITLAB_BASE_URL=${GITLAB_BASE_URL:-https://gitlab.com}
+      - GITLAB_TOKEN=${GITLAB_TOKEN}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - PORT=${PORT:-3000}
+      - WORK_DIR=/tmp/gitlab-copilot-work
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      # Database configuration
+      - MONGODB_URI=${MONGODB_URI}
+      - MONGODB_DB=${MONGODB_DB:-gitlab-copilot}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      # JWT authentication
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ACCESS_EXPIRES_IN=${JWT_ACCESS_EXPIRES_IN:-15m}
+      - JWT_REFRESH_EXPIRES_IN=${JWT_REFRESH_EXPIRES_IN:-7d}
+      # Password security
+      - BCRYPT_ROUNDS=${BCRYPT_ROUNDS:-12}
+      - MAX_LOGIN_ATTEMPTS=${MAX_LOGIN_ATTEMPTS:-5}
+      - LOCKOUT_DURATION=${LOCKOUT_DURATION:-15}
+      # Web UI configuration
+      - WEB_UI_ENABLED=${WEB_UI_ENABLED:-true}
+      - WEB_UI_BASE_PATH=${WEB_UI_BASE_PATH:-/auth}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      # Rate limiting
+      - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-900000}
+      - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS:-30}
+      - RATE_LIMIT_SKIP_SUCCESSFUL_REQUESTS=${RATE_LIMIT_SKIP_SUCCESSFUL_REQUESTS:-true}
+      # Security settings
+      - SESSION_TIMEOUT=${SESSION_TIMEOUT:-30m}
+      - COOKIE_SECURE=${COOKIE_SECURE:-true}
+      - COOKIE_SAME_SITE=${COOKIE_SAME_SITE:-strict}
+      - TRUST_PROXY=${TRUST_PROXY:-false}
+      # Session management
+      - SESSION_ENABLED=${SESSION_ENABLED:-true}
+      - SESSION_MAX_IDLE_TIME=${SESSION_MAX_IDLE_TIME:-7d}
+      - SESSION_MAX_SESSIONS=${SESSION_MAX_SESSIONS:-1000}
+      - SESSION_CLEANUP_INTERVAL=${SESSION_CLEANUP_INTERVAL:-1h}
+    volumes:
+      - ./logs:/app/logs
+      - webhook-work:/tmp/gitlab-copilot-work
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:${PORT:-3000}/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  webhook-work:
