@@ -118,8 +118,8 @@ GitLab AI Copilot 是一个**企业级的 AI 驱动开发协作平台**,通过 G
 ### 4️⃣ **多 AI 协同** - 一个平台,多种 AI
 
 ```markdown
-@claude 重构这个模块,提高可读性     # 使用 Claude (擅长代码质量)
-@codex 优化这段代码的性能          # 使用 Codex (擅长性能优化)
+@claude 重构这个模块,提高可读性     # 使用 Claude (擅长写代码)
+@codex 优化这段代码的性能          # 使用 Codex (擅长code review)
 ```
 
 **创新点**:

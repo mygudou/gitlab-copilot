@@ -101,38 +101,64 @@ docker-compose logs -f gitlab-copilot
 
 ## 环境配置
 
-必需的环境变量：
+### 部署模式选择
 
-- `GITLAB_TOKEN` - 具有 `api`、`read_repository`、`write_repository` 权限的 GitLab API 令牌
-- `WEBHOOK_SECRET` - 用于签名验证的 GitLab webhook 密钥
+系统支持两种部署模式：
 
-可选：
+#### 1. 传统单用户模式
+- 适用于个人或小团队使用
+- 所有配置通过环境变量管理
+- 必需：`GITLAB_TOKEN` + `WEBHOOK_SECRET`
 
-- `ANTHROPIC_AUTH_TOKEN` - Anthropic API 令牌（依赖 `claude login` 本地凭证时可跳过）
+#### 2. 多租户平台模式（推荐）
+- 适用于多用户、多项目场景
+- 每个用户通过 Web UI 独立配置 GitLab 凭证
+- 必需：`MONGODB_URI` + `MONGODB_DB` + `ENCRYPTION_KEY`
+- 可选：`GITLAB_TOKEN` + `WEBHOOK_SECRET` 作为兜底凭证
+
+### 核心环境变量
+
+**AI 提供商配置**：
+- `AI_EXECUTOR` (默认: claude) - 用于 Issue 对话、代码修改等常规任务的默认 AI
+  - 可选值: 'claude' 或 'codex'
+  - 用户可通过 `@claude` 或 `@codex` 在每次请求时覆盖
+- `CODE_REVIEW_EXECUTOR` (默认: codex) - 专门用于 MR 自动代码审查的默认 AI
+  - 可选值: 'claude' 或 'codex'
+  - 同样支持通过提及覆盖
+
+**AI API 配置**：
+- `ANTHROPIC_AUTH_TOKEN` - Anthropic API 令牌（可选，依赖 `claude login` 本地凭证时可跳过）
 - `ANTHROPIC_BASE_URL` (默认: https://api.anthropic.com)
+
+**GitLab 配置（传统单用户模式）**：
+- `GITLAB_TOKEN` - 具有 `api`、`read_repository`、`write_repository` 权限的 GitLab Personal Access Token
+- `WEBHOOK_SECRET` - 用于 webhook 签名验证的密钥
 - `GITLAB_BASE_URL` (默认: https://gitlab.com)
+
+**多租户平台配置**：
+- `MONGODB_URI` - MongoDB 连接字符串
+- `MONGODB_DB` - 数据库名称
+- `ENCRYPTION_KEY` - 32 字节十六进制加密密钥（生成方法：`openssl rand -hex 32`）
+- `WEB_UI_ENABLED` (默认: true) - 是否启用 Web 管理界面
+
+**服务配置**：
 - `PORT` (默认: 3000)
 - `WORK_DIR` (默认: /tmp/gitlab-copilot-work)
 - `LOG_LEVEL` (默认: info)
 
-会话管理配置：
+**会话管理配置**：
 - `SESSION_ENABLED` (默认: true) - 启用/禁用长交互会话
-- `SESSION_MAX_IDLE_TIME` (默认: 7d) - 会话过期前的最大空闲时间。支持：'7d'、'24h'、'60m'、'3600s' 或毫秒
+- `SESSION_MAX_IDLE_TIME` (默认: 7d) - 会话过期前的最大空闲时间
 - `SESSION_MAX_SESSIONS` (默认: 1000) - 并发会话的最大数量
 - `SESSION_CLEANUP_INTERVAL` (默认: 1h) - 会话清理任务的频率
 
-工作区清理配置：
+**工作区清理配置**：
 - `WORKSPACE_MAX_IDLE_TIME` (默认: 24h) - 工作区清理前的最大空闲时间
 - `WORKSPACE_CLEANUP_INTERVAL` (默认: 6h) - 工作区清理任务的频率
 
-AI 提供商配置：
-- `AI_EXECUTOR` (默认: claude) - 默认 AI 提供商（'claude' 或 'codex'）
-- `CODE_REVIEW_EXECUTOR` (默认: codex) - 代码审查默认 AI 提供商（'claude' 或 'codex'）
-- 两个提供商都支持基于会话的长交互
-- 可以使用 @claude 或 @codex 提及来切换每个请求的提供商
-- Merge Request 自动代码审查使用 `CODE_REVIEW_EXECUTOR` 配置的提供商
-
-当省略 `ANTHROPIC_AUTH_TOKEN` 时，确保服务在已执行 `claude login` 的用户账户下运行。
+**注意事项**：
+- 当省略 `ANTHROPIC_AUTH_TOKEN` 时，确保服务在已执行 `claude login` 的用户账户下运行
+- 在多租户模式下，`GITLAB_TOKEN` 和 `WEBHOOK_SECRET` 仅作为兜底凭证，建议为每个租户单独配置
 
 ## GitLab Webhook 设置
 
