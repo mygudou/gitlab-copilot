@@ -101,22 +101,18 @@ docker-compose logs -f gitlab-copilot
 
 ## 环境配置
 
-### 部署模式选择
+### 必需环境变量
 
-系统支持两种部署模式：
+**MongoDB 配置**：
+- `MONGODB_URI` - MongoDB 连接字符串
+- `MONGODB_DB` - 数据库名称（如 `gitlab-copilot`）
+- `ENCRYPTION_KEY` - 32 字节十六进制加密密钥
+  - 生成方法：`openssl rand -hex 32`
 
-#### 1. 传统单用户模式
-- 适用于个人或小团队使用
-- 所有配置通过环境变量管理
-- 必需：`GITLAB_TOKEN` + `WEBHOOK_SECRET`
-
-#### 2. 多租户平台模式（推荐）
-- 适用于多用户、多项目场景
-- 每个用户通过 Web UI 独立配置 GitLab 凭证
-- 必需：`MONGODB_URI` + `MONGODB_DB` + `ENCRYPTION_KEY`
-- 可选：`GITLAB_TOKEN` + `WEBHOOK_SECRET` 作为兜底凭证
-
-### 核心环境变量
+**Web UI 配置**：
+- `WEB_UI_ENABLED` (默认: true) - 启用 Web 管理界面
+- `JWT_SECRET` - JWT 密钥
+  - 生成方法：`openssl rand -base64 32`
 
 **AI 提供商配置**：
 - `AI_EXECUTOR` (默认: claude) - 用于 Issue 对话、代码修改等常规任务的默认 AI
@@ -126,20 +122,11 @@ docker-compose logs -f gitlab-copilot
   - 可选值: 'claude' 或 'codex'
   - 同样支持通过提及覆盖
 
+### 可选环境变量
+
 **AI API 配置**：
 - `ANTHROPIC_AUTH_TOKEN` - Anthropic API 令牌（可选，依赖 `claude login` 本地凭证时可跳过）
 - `ANTHROPIC_BASE_URL` (默认: https://api.anthropic.com)
-
-**GitLab 配置（传统单用户模式）**：
-- `GITLAB_TOKEN` - 具有 `api`、`read_repository`、`write_repository` 权限的 GitLab Personal Access Token
-- `WEBHOOK_SECRET` - 用于 webhook 签名验证的密钥
-- `GITLAB_BASE_URL` (默认: https://gitlab.com)
-
-**多租户平台配置**：
-- `MONGODB_URI` - MongoDB 连接字符串
-- `MONGODB_DB` - 数据库名称
-- `ENCRYPTION_KEY` - 32 字节十六进制加密密钥（生成方法：`openssl rand -hex 32`）
-- `WEB_UI_ENABLED` (默认: true) - 是否启用 Web 管理界面
 
 **服务配置**：
 - `PORT` (默认: 3000)
@@ -158,15 +145,35 @@ docker-compose logs -f gitlab-copilot
 
 **注意事项**：
 - 当省略 `ANTHROPIC_AUTH_TOKEN` 时，确保服务在已执行 `claude login` 的用户账户下运行
-- 在多租户模式下，`GITLAB_TOKEN` 和 `WEBHOOK_SECRET` 仅作为兜底凭证，建议为每个租户单独配置
+- 所有 GitLab 凭证通过 Web UI 配置，存储在 MongoDB 中并加密
 
 ## GitLab Webhook 设置
 
-配置 GitLab webhooks 以触发以下事件：
+### 1. 通过 Web UI 配置
 
-- Issues 事件
-- Merge request 事件
-- 评论（Push 评论、Issue 评论、Merge request 评论）
+访问 Web 管理界面：`http://your-domain:3000/auth/`
+
+- 注册并登录账号
+- 在「GitLab 配置」页面添加配置：
+  - GitLab URL（如 `https://gitlab.com`）
+  - Personal Access Token（需要权限：`api`, `read_repository`, `write_repository`）
+  - 描述（可选）
+- 系统自动生成：
+  - Webhook Secret（加密存储在 MongoDB）
+  - 唯一的 Webhook URL：`https://your-domain.com/webhook/{userToken}`
+
+### 2. 在 GitLab 项目中配置 Webhook
+
+进入 GitLab 项目 → Settings → Webhooks：
+- **URL**: 使用 Web UI 中生成的完整 Webhook URL
+- **Secret Token**: 使用 Web UI 中显示的 Webhook Secret
+- **触发器**: 勾选以下事件
+  - Issues events
+  - Merge request events
+  - Comments (Issue comments, MR comments)
+- **启用**: Enable SSL verification
+
+### 支持的 AI 指令
 
 服务在以下位置检测 AI 指令：
 
@@ -318,6 +325,49 @@ npm install -g @anthropic-ai/claude-code
 - 临时工作目录的正确卷挂载
 - 具有自定义子网的网络隔离
 - 自动重启策略
+
+### AI 认证配置
+
+Docker 容器内需要配置 AI CLI 工具的认证：
+
+**Claude 认证**:
+
+1. **使用 API Token（推荐）**: 在 `.env` 文件中配置
+   ```bash
+   ANTHROPIC_AUTH_TOKEN=sk-ant-your-api-key
+   ```
+   从 [Anthropic Console](https://console.anthropic.com/) 获取，重启容器生效。
+
+2. **Docker 内部登录**: 进入容器执行
+   ```bash
+   docker exec -it gitlab-copilot claude login
+   ```
+
+3. **挂载本地认证文件**: 在 docker-compose.yml 中取消注释
+   ```yaml
+   - ~/.claude:/home/node/.claude:ro
+   ```
+
+**Codex 认证**:
+
+1. **复制认证文件（推荐）**:
+   ```bash
+   # 本地登录生成认证文件
+   codex auth login
+
+   # 复制到容器
+   docker cp ~/.codex/auth.json gitlab-copilot:/home/node/.codex/auth.json
+   ```
+
+2. **挂载本地认证文件**: 在 docker-compose.yml 中取消注释
+   ```yaml
+   - ~/.codex:/home/node/.codex:ro
+   ```
+
+**注意**:
+- Claude 推荐使用 API Token 方式，更简单
+- Codex 需要复制或挂载 `auth.json` 文件
+- 容器内路径: `/home/node/.claude/` 和 `/home/node/.codex/`
 
 ## 多租户设置
 

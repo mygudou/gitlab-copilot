@@ -46,6 +46,11 @@ services:
     volumes:
       - ./logs:/app/logs
       - webhook-work:/tmp/gitlab-copilot-work
+      # AI 认证文件挂载（可选，取消注释以启用）
+      # Claude 认证文件
+      # - ~/.claude:/home/node/.claude:ro
+      # Codex 认证文件
+      # - ~/.codex:/home/node/.codex:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:${PORT:-3000}/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"]
