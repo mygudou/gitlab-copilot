@@ -68,7 +68,7 @@ AI 自动:
 
 ```markdown
 # 在 MR 评论中
-@claude 根据审查意见修复安全问题，并添加输入验证
+@codex 根据审查意见修复安全问题，并添加输入验证
 
 AI 自动:
 ✅ 修改代码并提交到 MR 源分支
@@ -228,187 +228,74 @@ volumes:
 
 ## ⚙️ 环境配置
 
-### 必需配置
+核心配置项：
 
 ```bash
-# MongoDB 配置
+# 数据库（必需）
 MONGODB_URI=mongodb://user:pass@host:27017/?authSource=admin
 MONGODB_DB=gitlab-copilot
-ENCRYPTION_KEY=your_32_byte_hex_key   # 生成: openssl rand -hex 32
+ENCRYPTION_KEY=your_32_byte_hex_key   # openssl rand -hex 32
 
-# Web UI 配置
+# Web UI（必需）
 WEB_UI_ENABLED=true
-JWT_SECRET=your_jwt_secret            # 生成: openssl rand -base64 32
+JWT_SECRET=your_jwt_secret            # openssl rand -base64 32
 
-# AI 配置（全局默认值）
-AI_EXECUTOR=claude                    # 默认 AI（claude 或 codex）
-CODE_REVIEW_EXECUTOR=codex            # 代码审查默认 AI
-
-# 服务配置
-PORT=3000
-LOG_LEVEL=info
+# AI 配置
+AI_EXECUTOR=claude                    # claude 或 codex
+CODE_REVIEW_EXECUTOR=codex
+ANTHROPIC_AUTH_TOKEN=sk-ant-xxx       # 可选，Claude API Token
 ```
 
-### 可选配置
+完整配置说明: [CLAUDE.md](CLAUDE.md#环境配置)
 
-```bash
-# Session 管理
-SESSION_ENABLED=true
-SESSION_MAX_IDLE_TIME=7d
-SESSION_MAX_SESSIONS=1000
-SESSION_CLEANUP_INTERVAL=1h
+## 📖 使用指南
 
-# 工作区管理
-WORKSPACE_MAX_IDLE_TIME=24h
-WORKSPACE_CLEANUP_INTERVAL=6h
+### 基本用法
 
-# Anthropic API（如果需要）
-ANTHROPIC_BASE_URL=https://api.anthropic.com
-ANTHROPIC_AUTH_TOKEN=your_anthropic_token
-```
-
-### 配置流程
-
-1. 复制并编辑配置文件：
-   ```bash
-   cp .env.example .env
-   # 编辑 .env 文件，填入上述必需配置
-   ```
-
-2. 启动服务：
-   ```bash
-   npm run dev
-   ```
-
-3. 访问 Web UI 完成 GitLab 配置：
-   ```
-   http://localhost:3000/auth/
-   ```
-
-查看完整配置选项: [CLAUDE.md](CLAUDE.md#环境配置)
-
-## 📖 使用文档
-
-### Issue 中使用 AI
-
+**Issue 开发**:
 ```markdown
-# 代码开发
 @claude 实现用户登录功能
+# AI 自动创建分支、生成代码、创建 MR
 
-# 继续对话（AI 会记住上下文）
 现在添加单元测试
-优化一下性能
+# 长交互模式，AI 记住上下文
+```
 
-# 文档生成
+**MR 审查**:
+```markdown
+# 创建 MR 时自动触发审查
+# AI 分析代码、生成 Summary、修复标题
+
+# 在 MR 评论中
+@codex 修复审查中的安全问题
+# AI 直接修改代码并推送
+```
+
+**文档生成**:
+```markdown
 /spec 编写技术规范
 /plan 生成实施计划
 /tasks 生成任务清单
 ```
 
-### MR 中使用 AI
+更多示例和最佳实践: [完整文档](CLAUDE.md)
 
-```markdown
-# 自动审查（创建 MR 时自动触发）
-标题: feat(api): add user endpoints
+## 🛠️ 开发
 
-# MR 评论中修复代码
-@claude 修复审查中发现的安全问题
-```
-
-更多详细示例: [使用指南](CLAUDE.md#使用指南)
-
-## 📊 工作流程示例
-
-### 场景 1: 快速开发
-```
-产品经理在 Issue 中描述需求
-  → @claude 实现功能
-  → AI 自动生成代码并创建 MR
-  → 开发者 review 并合并
-```
-
-### 场景 2: 代码质量保障
-```
-开发者创建 MR
-  → AI 自动审查代码
-  → AI 自动修复 MR 标题和生成 Summary
-  → 在评论中 @claude 修复问题
-  → MR 自动更新
-  → 人工最终确认
-```
-
-### 场景 3: 文档驱动开发
-```
-产品经理描述需求
-  → /spec 生成技术规范
-  → /plan 生成实施计划
-  → /tasks 生成任务清单
-  → 团队评审并执行
-```
-
-## 🛠️ 开发指南
-
-### 项目结构
-
-```
-src/
-├── server/           # Webhook 服务器
-├── services/         # 核心业务逻辑
-│   ├── eventProcessor.ts
-│   ├── sessionManager.ts
-│   ├── aiExecutor.ts
-│   └── storage/      # 数据存储
-├── routes/           # API 路由
-├── middleware/       # 中间件
-└── types/            # TypeScript 类型
-```
-
-### 开发命令
-
+常用命令：
 ```bash
-npm run dev           # 开发模式（热重载）
-npm run build         # 构建项目
-npm run lint          # 代码检查
-npm test              # 运行测试
-npm run type-check    # 类型检查
+npm run dev           # 开发模式
+npm run build         # 构建
+npm test              # 测试
 ```
 
-### 测试
-
-```bash
-npm test                  # 运行所有测试
-npm run test:coverage     # 生成覆盖率报告
-npm run test:e2e          # 端到端测试
-```
-
-## 🐳 部署
-
-### Docker Compose
-
+Docker 部署：
 ```bash
 docker-compose up -d
 docker-compose logs -f gitlab-copilot
 ```
 
-## 📚 API 文档
-
-### Webhook 端点
-
-**POST** `/webhook/:userToken?`
-
-接收 GitLab webhook 事件
-
-**Headers:**
-- `X-Gitlab-Token`: Webhook 验证令牌
-- `X-Gitlab-Event`: 事件类型
-
-### 健康检查
-
-**GET** `/health`
-
-获取服务状态和 Session 统计
-
-更多 API 文档: [API Reference](docs/api.md)
+详细开发指南: [CLAUDE.md](CLAUDE.md)
 
 ## 🔧 故障排除
 
@@ -431,8 +318,8 @@ claude login
 <details>
 <summary><strong>Webhook 验证失败</strong></summary>
 
-1. 验证 `.env` 中的 `WEBHOOK_SECRET` 与 GitLab 配置一致
-2. 检查多租户模式下的 userToken 是否正确
+1. 检查 Web UI 中的 Webhook URL 和 Secret 是否正确复制到 GitLab
+2. 验证 userToken 是否正确
 3. 确认防火墙和网络配置
 </details>
 
@@ -450,37 +337,24 @@ rm /tmp/gitlab-copilot-work/sessions.json
 
 更多问题解决: [故障排除指南](docs/troubleshooting.md)
 
-## 🤝 贡献指南
+## 🤝 参与贡献
 
-我们欢迎所有形式的贡献！
+欢迎提交 Issue 和 Pull Request！
 
 1. Fork 项目
-2. 创建功能分支 (`git checkout -b feature/amazing-feature`)
-3. 提交更改 (`git commit -m 'feat: add amazing feature'`)
-4. 推送到分支 (`git push origin feature/amazing-feature`)
-5. 创建 Pull Request
+2. 创建功能分支 (`git checkout -b feature/xxx`)
+3. 提交更改 (`git commit -m 'feat: xxx'`)
+4. 推送并创建 Pull Request
 
-请遵循：
-- [代码规范](docs/code-style.md)
-- [提交规范](docs/commit-convention.md)
-- [行为准则](CODE_OF_CONDUCT.md)
+## 📞 联系与支持
+
+- 🐛 [GitHub Issues](https://github.com/mygudou/gitlab-copilot/issues)
+- 📧 Email: mygudou@gmail.com
+- 📖 [完整文档](CLAUDE.md)
 
 ## 📄 许可证
 
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
-
-## 🙏 致谢
-
-- [Anthropic Claude](https://www.anthropic.com/) - AI 能力支持
-- [OpenAI Codex](https://openai.com/) - 代码生成和优化
-- [GitHub Spec Kit](https://github.com/github/spec-kit) - 文档规范工具
-- 所有贡献者 ❤️
-
-## 📞 联系我们
-
-- 📧 Email: mygudou@gmail.com
-- 🐛 Issues: [GitHub Issues](https://github.com/mygudou/gitlab-copilot/issues)
-- 📖 文档: [完整文档](docs/)
+MIT License - 详见 [LICENSE](LICENSE)
 
 ---
 
@@ -488,8 +362,6 @@ rm /tmp/gitlab-copilot-work/sessions.json
 
 **[⬆ 回到顶部](#gitlab-ai-copilot-)**
 
-Made with ❤️ by the GitLab AI Copilot Community
-
-如果这个项目对你有帮助，请给我们一个 ⭐️
+如果这个项目对你有帮助，欢迎 Star ⭐️
 
 </div>
