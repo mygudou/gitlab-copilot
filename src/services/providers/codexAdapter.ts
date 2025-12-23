@@ -29,36 +29,25 @@ export class CodexAdapter implements ProviderAdapter {
     _context: AiExecutionContext,
     options?: ExecutionOptions
   ): ProviderExecutionConfig {
-    if (options) {
-      const args = ['exec'];
+    const args = ['exec'];
 
-      if (options.outputFormat === 'json') {
-        args.push('--experimental-json');
-      }
+    if (options?.outputFormat === 'json') {
+      args.push('--experimental-json');
+    }
 
-      args.push(
-        '--dangerously-bypass-approvals-and-sandbox',
-        '--color',
-        'never'
-      );
+    args.push(
+      '--dangerously-bypass-approvals-and-sandbox',
+      '--color',
+      'never'
+    );
 
-      if (options.sessionId && !options.isNewSession) {
-        args.push('resume', options.sessionId, payload.prompt);
-      } else {
-        args.push(payload.prompt);
-      }
-
-      return { args };
+    if (options?.sessionId && !options.isNewSession) {
+      args.push('resume', options.sessionId);
     }
 
     return {
-      args: [
-        'exec',
-        '--dangerously-bypass-approvals-and-sandbox',
-        '--color',
-        'never',
-        payload.prompt,
-      ],
+      args,
+      stdin: payload.prompt,
     };
   }
 

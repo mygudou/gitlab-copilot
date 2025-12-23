@@ -9,6 +9,7 @@ export interface PromptPayload {
 
 export interface ProviderExecutionConfig {
   args: string[];
+  stdin?: string;
 }
 
 export interface ParsedExecutionResult {
