@@ -114,11 +114,26 @@ export class AiExecutor {
         'exec',
         '--dangerously-bypass-approvals-and-sandbox',
         '--color', 'never',
-        command
       ];
     }
 
     return ['--non-interactive', command];
+  }
+
+  private buildStdinPayload(
+    command: string,
+    context: AiExecutionContext,
+    provider: 'claude' | 'codex'
+  ): string | null {
+    const contextMessage = context.context
+      ? `Context: ${context.context}\nProject: ${context.projectUrl}\nBranch: ${context.branch}\n\n`
+      : '';
+
+    if (provider === 'codex') {
+      return `${contextMessage}${command}`;
+    }
+
+    return contextMessage || null;
   }
 
   private buildCliEnv(provider: 'claude' | 'codex'): NodeJS.ProcessEnv {
@@ -209,13 +224,12 @@ export class AiExecutor {
         reject(new Error(`Failed to execute ${this.getExecutorName(provider)}: ${err.message}`));
       });
 
-      // Provide context to claude if needed
-      if (context.context) {
-        const contextMessage = `Context: ${context.context}\\nProject: ${context.projectUrl}\\nBranch: ${context.branch}\\n\\n`;
-        cliProcess.stdin?.write(contextMessage);
+      const stdinPayload = this.buildStdinPayload(command, context, provider);
+      if (typeof stdinPayload === 'string') {
+        cliProcess.stdin?.end(stdinPayload);
+      } else {
+        cliProcess.stdin?.end();
       }
-
-      cliProcess.stdin?.end();
     });
   }
 

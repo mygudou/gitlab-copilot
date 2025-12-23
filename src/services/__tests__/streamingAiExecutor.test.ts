@@ -64,7 +64,8 @@ class MockAdapter implements ProviderAdapter {
   createExecutionConfig(payload: PromptPayload, _context: AiExecutionContext, options?: ExecutionOptions) {
     this.createExecutionConfigImpl(payload, options);
     return {
-      args: ['run', payload.prompt],
+      args: ['run'],
+      stdin: payload.prompt,
     };
   }
 
@@ -250,7 +251,7 @@ describe('CodexAdapter', () => {
 
     expect(config.args[0]).toBe('exec');
     expect(config.args).toContain('--dangerously-bypass-approvals-and-sandbox');
-    expect(config.args[config.args.length - 1]).toBe('user prompt');
+    expect(config.stdin).toBe('user prompt');
   });
 
   it('builds CLI args for session resume', () => {
@@ -266,6 +267,7 @@ describe('CodexAdapter', () => {
     expect(config.args).toContain('resume-id');
     expect(config.args[0]).toBe('exec');
     expect(config.args).toContain('--experimental-json');
+    expect(config.stdin).toBe('user prompt');
   });
 
   it('omits experimental json flag when requesting text output', () => {
@@ -280,6 +282,7 @@ describe('CodexAdapter', () => {
     expect(config.args).toContain('resume');
     expect(config.args).toContain('resume-id');
     expect(config.args).not.toContain('--experimental-json');
+    expect(config.stdin).toBe('user prompt');
   });
 
   it('parses assistant message and session id from output', () => {

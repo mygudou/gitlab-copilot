@@ -33,6 +33,7 @@ interface RunCliProcessParams {
   adapter: ProviderAdapter;
   callback: StreamingProgressCallback;
   cliArgs: string[];
+  stdin?: string;
   timeoutMs: number;
   env: NodeJS.ProcessEnv;
 }
@@ -216,6 +217,7 @@ export class StreamingAiExecutor {
       adapter,
       callback,
       cliArgs: executionConfig.args,
+      stdin: executionConfig.stdin,
       timeoutMs,
       env,
     });
@@ -271,7 +273,7 @@ export class StreamingAiExecutor {
   }
 
   private async runCliProcess(params: RunCliProcessParams): Promise<{ output: string }> {
-    const { commandLabel, projectPath, adapter, callback, cliArgs, timeoutMs, env } = params;
+    const { commandLabel, projectPath, adapter, callback, cliArgs, stdin, timeoutMs, env } = params;
     const cliBinary = adapter.getBinary();
 
     return new Promise((resolve, reject) => {
@@ -334,8 +336,17 @@ export class StreamingAiExecutor {
         console.log(`[${adapter.getDisplayName().toUpperCase()} STDERR] ${chunk.trim()}`);
         logger.debug(`${adapter.getDisplayName()} stderr chunk`, chunk);
 
-        if (chunk.trim()) {
-          await callback.onProgress(`⚠️ ${adapter.getDisplayName()} error: ${chunk.trim()}`, false);
+        const trimmed = chunk.trim();
+        if (trimmed) {
+          if (
+            adapter.id === 'codex' &&
+            trimmed.toLowerCase().includes('reading prompt from stdin')
+          ) {
+            await callback.onProgress(`🤖 ${trimmed}`, false);
+            return;
+          }
+
+          await callback.onProgress(`⚠️ ${adapter.getDisplayName()} error: ${trimmed}`, false);
         }
       });
 
@@ -384,7 +395,11 @@ export class StreamingAiExecutor {
         reject(new Error(`Failed to execute ${adapter.getDisplayName()}: ${err.message}`));
       });
 
-      cliProcess.stdin?.end();
+      if (typeof stdin === 'string') {
+        cliProcess.stdin?.end(stdin);
+      } else {
+        cliProcess.stdin?.end();
+      }
     });
   }
 
