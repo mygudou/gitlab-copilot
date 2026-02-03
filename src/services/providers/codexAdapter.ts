@@ -19,9 +19,25 @@ export class CodexAdapter implements ProviderAdapter {
   }
 
   public buildEnv(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-    return {
-      ...baseEnv,
-    };
+    // 过滤掉可能很大的环境变量，避免 E2BIG 错误
+    // Linux 的 ARG_MAX 限制包括命令行参数 + 环境变量
+    const filteredEnv: NodeJS.ProcessEnv = {};
+
+    const excludePatterns = [
+      /^npm_/i, // npm scripts 运行时注入的大量变量
+      /^LS_COLORS$/i, // 终端颜色配置（可能很大）
+      /^LESS_TERMCAP/i, // less 配置
+      /^COMP_/i, // bash completion
+      /^BASH_FUNC_/i, // bash functions
+    ];
+
+    for (const [key, value] of Object.entries(baseEnv)) {
+      if (!excludePatterns.some(pattern => pattern.test(key))) {
+        filteredEnv[key] = value;
+      }
+    }
+
+    return filteredEnv;
   }
 
   public createExecutionConfig(

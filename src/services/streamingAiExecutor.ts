@@ -282,6 +282,12 @@ export class StreamingAiExecutor {
         .join(' ')}`;
 
       logger.debug(`[FULL ${adapter.getDisplayName().toUpperCase()} COMMAND] ${fullCommand}`);
+
+      // 诊断 E2BIG 问题：检查传递给 spawn 的数据大小
+      const envSize = Object.entries(env).reduce((sum, [k, v]) => sum + k.length + (v?.length ?? 0), 0);
+      const argsSize = cliArgs.reduce((sum, arg) => sum + arg.length, 0);
+      const stdinSize = stdin?.length ?? 0;
+
       logger.info(`Executing ${adapter.getDisplayName()} CLI`, {
         command: cliBinary,
         args: cliArgs,
@@ -289,6 +295,11 @@ export class StreamingAiExecutor {
         cwd: projectPath,
         userId: process.getuid?.(),
         userName: process.env.USER || 'unknown',
+        // 诊断信息
+        envSize,
+        envCount: Object.keys(env).length,
+        argsSize,
+        stdinSize,
       });
 
       const cliProcess = spawn(cliBinary, cliArgs, {

@@ -326,7 +326,9 @@ describe('ClaudeAdapter', () => {
     expect(config.args).toContain('--resume');
     expect(config.args).toContain('claude-session');
     expect(config.args).toContain('--append-system-prompt');
-    expect(config.args[config.args.length - 1]).toBe('user prompt');
+    // prompt 通过 stdin 传递，args 最后一个元素是 '-' 表示从 stdin 读取
+    expect(config.args[config.args.length - 1]).toBe('-');
+    expect(config.stdin).toBe('user prompt');
   });
 
   it('parses result from JSON payload and extracts session id', () => {

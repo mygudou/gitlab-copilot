@@ -19,10 +19,25 @@ export class ClaudeAdapter implements ProviderAdapter {
   }
 
   public buildEnv(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+    // 过滤掉可能很大的环境变量，避免 E2BIG 错误
+    // Linux 的 ARG_MAX 限制包括命令行参数 + 环境变量
+    const excludePatterns = [
+      /^npm_/i, // npm scripts 运行时注入的大量变量
+      /^LS_COLORS$/i, // 终端颜色配置（可能很大）
+      /^LESS_TERMCAP/i, // less 配置
+      /^COMP_/i, // bash completion
+      /^BASH_FUNC_/i, // bash functions
+    ];
+
     const env: NodeJS.ProcessEnv = {
-      ...baseEnv,
       ANTHROPIC_BASE_URL: config.anthropic.baseUrl,
     };
+
+    for (const [key, value] of Object.entries(baseEnv)) {
+      if (!excludePatterns.some(pattern => pattern.test(key))) {
+        env[key] = value;
+      }
+    }
 
     if (config.anthropic.authToken) {
       env.ANTHROPIC_AUTH_TOKEN = config.anthropic.authToken;
@@ -67,9 +82,12 @@ export class ClaudeAdapter implements ProviderAdapter {
     }
 
     args.push(`--allowedTools=${allowedTools}`);
-    args.push(payload.prompt);
 
-    return { args };
+    // 通过 stdin 传递 prompt，避免命令行参数过长导致 E2BIG 错误
+    // 使用 '-' 表示从 stdin 读取
+    args.push('-');
+
+    return { args, stdin: payload.prompt };
   }
 
   public parseResult(rawOutput: string): ParsedExecutionResult {
